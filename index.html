@@ -202,6 +202,27 @@
     .gacha-spin { font-size: 48px; text-align: center; animation: spin 0.8s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
 
+    /* ガチャ抽選アニメ */
+    .gacha-slot {
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .gacha-slot.spinning .char-img {
+      animation: gacha-shake 0.13s linear infinite alternate;
+    }
+    @keyframes gacha-shake {
+      0%   { transform: scale(0.92) rotate(-4deg); filter: brightness(0.85); }
+      100% { transform: scale(1.05) rotate(4deg); filter: brightness(1.1); }
+    }
+    .gacha-slot.settled .char-img {
+      animation: gacha-settle 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes gacha-settle {
+      0%   { transform: scale(0.5); opacity: 0.4; }
+      60%  { transform: scale(1.18); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .gacha-name.placeholder { opacity: 0.4; }
+
     /* ===== ターン順発表 ===== */
     .turn-list {
       width: 100%; display: flex; flex-direction: column; gap: 10px;
@@ -1287,39 +1308,86 @@
   // ===================================================
   // キャラ選択（ランダム）
   // ===================================================
+  let gachaSpinning = false;
+  let gachaSpinHandle = null;
+
   function startRandomSelect() {
-    rollRandom();
     showScreen('screen-char-random');
+    rollRandom();
   }
 
   function rollRandom() {
+    if (gachaSpinning) return;
     const charIds = shuffle(window.CHARACTERS.map((c) => c.id));
     state.players.forEach((p, idx) => {
-      p.characterId = charIds[idx]; // 8キャラ > 最大8人なのでOK
+      p.characterId = charIds[idx];
     });
-    renderRandomResult();
+    animateGacha(charIds);
   }
 
-  function renderRandomResult() {
+  function animateGacha(finalIds) {
+    gachaSpinning = true;
+    $('btn-random-roll').disabled = true;
+    $('btn-random-decide').disabled = true;
+
     const area = $('gacha-area');
     area.innerHTML = '';
-    state.players.forEach((p) => {
-      const ch = getCharacterById(p.characterId);
+    const slots = state.players.map((p, idx) => {
       const row = document.createElement('div');
       row.className = 'row';
+      const seed = window.CHARACTERS[(idx + Math.floor(Math.random() * 8)) % 8].id;
       row.innerHTML = `
         <span class="name">${escapeHtml(p.name)}</span>
         <span class="arrow">→</span>
-        ${charImg(ch.id, 'char-img-md')}
-        <span class="char-name">${ch.name}</span>
+        <span class="gacha-slot spinning">${charImg(seed, 'char-img-md')}</span>
+        <span class="char-name gacha-name placeholder">？？？</span>
       `;
       area.appendChild(row);
+      return {
+        row, idx,
+        settleAt: 700 + 220 * idx,  // 順次決まる演出
+        settled: false,
+        finalId: finalIds[idx]
+      };
     });
+
+    const startTime = Date.now();
+    if (gachaSpinHandle) clearInterval(gachaSpinHandle);
+    gachaSpinHandle = setInterval(() => {
+      const now = Date.now();
+      slots.forEach((s) => {
+        if (s.settled) return;
+        const slot = s.row.querySelector('.gacha-slot');
+        const nameEl = s.row.querySelector('.gacha-name');
+        if (now - startTime >= s.settleAt) {
+          slot.classList.remove('spinning');
+          slot.classList.add('settled');
+          slot.innerHTML = charImg(s.finalId, 'char-img-md');
+          const ch = getCharacterById(s.finalId);
+          nameEl.textContent = ch.name;
+          nameEl.classList.remove('placeholder');
+          s.settled = true;
+        } else {
+          const randId = window.CHARACTERS[Math.floor(Math.random() * 8)].id;
+          slot.innerHTML = charImg(randId, 'char-img-md');
+        }
+      });
+      if (slots.every((s) => s.settled)) {
+        clearInterval(gachaSpinHandle);
+        gachaSpinHandle = null;
+        gachaSpinning = false;
+        $('btn-random-roll').disabled = false;
+        $('btn-random-decide').disabled = false;
+      }
+    }, 95);
   }
 
   function initCharRandom() {
     $('btn-random-roll').addEventListener('click', rollRandom);
-    $('btn-random-decide').addEventListener('click', finalizeCharacters);
+    $('btn-random-decide').addEventListener('click', () => {
+      if (gachaSpinning) return;
+      finalizeCharacters();
+    });
   }
 
   // ===================================================
