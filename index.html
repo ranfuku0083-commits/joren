@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>常連 - BARの常連たちと、今夜も飲もう</title>
+  <!--
+    PWA関連（manifest.json, service-worker.js）はPhase 1後半で再有効化予定。
+    現状は単一HTMLとして動作確認できるよう <link rel="manifest"> と SW登録を外している。
+  -->
+
+  <style>
+    /* ===== カラーパレット（SPEC §7.2） ===== */
+    :root {
+      --color-bg-primary: #1B2845;
+      --color-bg-secondary: #2D3A5C;
+      --color-text-primary: #F5E6CB;
+      --color-accent-1: #FF4D8D;
+      --color-accent-2: #E8A547;
+      --color-accent-3: #4A7C7E;
+      --color-success: #8FA68E;
+      --color-danger: #E74C3C;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: var(--color-bg-primary);
+      color: var(--color-text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans',
+                   'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      overscroll-behavior-y: contain;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right)
+               env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    /* ===== 画面切替 ===== */
+    .screen {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 20px;
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .screen.is-active { display: flex; }
+    .screen.is-center  { justify-content: center; }
+
+    /* ===== 起動画面 ===== */
+    #screen-launch { justify-content: center; gap: 28px; text-align: center; }
+    .launch-moon  { font-size: 56px; line-height: 1; }
+    .launch-title {
+      font-size: 48px; font-weight: 800; letter-spacing: 0.1em; margin: 0;
+      text-shadow: 0 0 16px rgba(232, 165, 71, 0.35);
+    }
+    .launch-tagline { opacity: 0.75; font-size: 14px; letter-spacing: 0.08em; margin: 0; }
+    .launch-actions {
+      display: flex; flex-direction: column; gap: 16px;
+      width: 100%; max-width: 320px; margin-top: 16px;
+    }
+
+    /* ===== ヘッダー（タイトルバー） ===== */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; max-width: 480px; margin: 0 auto;
+      padding: 12px 16px;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(245, 230, 203, 0.12);
+      background: rgba(27, 40, 69, 0.85);
+    }
+    .topbar .title { font-weight: 700; letter-spacing: 0.06em; }
+    .topbar .menu-btn {
+      background: transparent; border: 0; color: var(--color-text-primary);
+      font-size: 22px; cursor: pointer; padding: 4px 8px;
+    }
+
+    h2.screen-heading {
+      margin: 0 0 16px;
+      font-size: 22px;
+      align-self: stretch;
+    }
+    p.screen-note { opacity: 0.7; font-size: 13px; margin: 0 0 16px; align-self: stretch; }
+
+    /* ===== ボタン共通 ===== */
+    .btn {
+      appearance: none; border: 0; padding: 14px 20px; min-height: 52px;
+      border-radius: 14px; font-size: 16px; font-weight: 700;
+      letter-spacing: 0.04em; cursor: pointer;
+      transition: transform 0.08s ease, opacity 0.2s ease, background 0.2s ease;
+      font-family: inherit; text-align: center;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary   { background: var(--color-accent-2); color: var(--color-bg-primary); }
+    .btn-secondary { background: var(--color-bg-secondary); color: var(--color-text-primary); border: 1px solid rgba(245, 230, 203, 0.2); }
+    .btn-danger    { background: var(--color-danger); color: #fff; }
+    .btn-ghost     { background: transparent; color: var(--color-text-primary); opacity: 0.65; font-weight: 500; min-height: 40px; padding: 8px 12px; }
+    .btn-ghost:hover { opacity: 1; }
+    .btn-block { width: 100%; }
+
+    .actions { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 16px; }
+    .actions.row { flex-direction: row; }
+    .actions.row > * { flex: 1; }
+
+    /* ===== プレイヤー登録 ===== */
+    .player-list { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+    .player-row {
+      display: flex; gap: 8px; align-items: center;
+    }
+    .player-row .player-num {
+      width: 28px; text-align: right; font-weight: 700; opacity: 0.6; font-size: 14px;
+    }
+    .player-row input[type="text"] {
+      flex: 1; padding: 12px 14px; border-radius: 12px;
+      border: 1px solid rgba(245, 230, 203, 0.25);
+      background: var(--color-bg-secondary); color: var(--color-text-primary);
+      font-size: 16px; font-family: inherit; min-height: 48px;
+    }
+    .player-row input[type="text"]:focus { outline: 2px solid var(--color-accent-2); }
+    .player-row .remove-btn {
+      background: transparent; border: 0; color: var(--color-text-primary);
+      opacity: 0.5; font-size: 22px; padding: 4px 8px; cursor: pointer;
+    }
+    .player-row .remove-btn:hover { opacity: 1; color: var(--color-danger); }
+
+    .mode-select {
+      display: flex; flex-direction: column; gap: 10px;
+      margin-top: 16px; padding: 16px;
+      background: var(--color-bg-secondary); border-radius: 12px; width: 100%;
+    }
+    .mode-select label {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 4px; cursor: pointer; font-size: 15px;
+    }
+    .mode-select input[type="radio"] { width: 20px; height: 20px; accent-color: var(--color-accent-2); }
+    .mode-select .label-title { font-weight: 700; }
+    .mode-select .label-desc { display: block; font-size: 12px; opacity: 0.7; margin-top: 2px; }
+
+    /* ===== キャラ選択（手動） ===== */
+    .char-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+      width: 100%;
+    }
+    .char-card {
+      background: var(--color-bg-secondary);
+      border: 2px solid transparent;
+      border-radius: 14px;
+      padding: 12px 6px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      cursor: pointer; font-family: inherit; color: var(--color-text-primary);
+      transition: transform 0.1s ease, border-color 0.2s ease, opacity 0.2s ease;
+    }
+    .char-card:active { transform: scale(0.95); }
+    .char-card .emoji { font-size: 36px; line-height: 1; }
+    .char-card .name  { font-size: 11px; font-weight: 600; }
+    .char-card.is-taken { opacity: 0.3; pointer-events: none; }
+    .char-card.is-taken::after {
+      content: '取済'; font-size: 9px; color: var(--color-accent-2);
+    }
+
+    .selection-status {
+      width: 100%; padding: 12px; background: var(--color-bg-secondary);
+      border-radius: 12px; margin-top: 16px;
+    }
+    .selection-status h3 { margin: 0 0 8px; font-size: 13px; opacity: 0.7; font-weight: 600; }
+    .selection-status ul { list-style: none; padding: 0; margin: 0; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+    .selection-status li.current { color: var(--color-accent-2); font-weight: 700; }
+
+    /* ===== ランダム抽選 ===== */
+    .random-result {
+      width: 100%; padding: 16px;
+      background: var(--color-bg-secondary); border-radius: 14px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .random-result .row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 4px; border-bottom: 1px dashed rgba(245, 230, 203, 0.12);
+    }
+    .random-result .row:last-child { border-bottom: 0; }
+    .random-result .name { flex: 1; font-weight: 600; }
+    .random-result .arrow { opacity: 0.5; }
+    .random-result .emoji { font-size: 28px; }
+    .random-result .char-name { font-size: 13px; opacity: 0.8; }
+
+    .gacha-spin { font-size: 48px; text-align: center; animation: spin 0.8s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
+
+    /* ===== ターン順発表 ===== */
+    .turn-list {
+      width: 100%; display: flex; flex-direction: column; gap: 10px;
+    }
+    .turn-list .turn-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px; background: var(--color-bg-secondary); border-radius: 12px;
+    }
+    .turn-list .num {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--color-accent-2); color: var(--color-bg-primary);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 800; flex-shrink: 0;
+    }
+    .turn-list .emoji { font-size: 26px; }
+    .turn-list .player-name { flex: 1; font-weight: 600; }
+    .turn-list .char-name { font-size: 12px; opacity: 0.7; }
+
+    /* ===== ゲームメイン ===== */
+    #screen-game { gap: 18px; }
+    .current-turn-card {
+      width: 100%; padding: 22px; border-radius: 18px;
+      background: linear-gradient(135deg, var(--color-bg-secondary), rgba(74, 124, 126, 0.4));
+      text-align: center;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+    }
+    .current-turn-card .label { font-size: 12px; opacity: 0.6; letter-spacing: 0.1em; }
+    .current-turn-card .emoji { font-size: 64px; line-height: 1; }
+    .current-turn-card .player-name { font-size: 22px; font-weight: 800; }
+    .current-turn-card .char-name { font-size: 14px; opacity: 0.8; }
+    .current-turn-card .round { font-size: 11px; opacity: 0.5; margin-top: 4px; }
+
+    .draw-btn {
+      width: 100%; min-height: 88px; font-size: 22px;
+      background: var(--color-accent-1); color: #fff;
+      box-shadow: 0 0 24px rgba(255, 77, 141, 0.35);
+    }
+
+    .game-status {
+      display: flex; justify-content: space-around;
+      width: 100%; padding: 10px 14px;
+      background: var(--color-bg-secondary); border-radius: 12px;
+      font-size: 13px;
+    }
+    .game-status .stat .num { font-weight: 800; color: var(--color-accent-2); font-size: 18px; }
+    .game-status .stat .lbl { opacity: 0.6; font-size: 11px; }
+
+    /* ===== 3秒カウントダウン ===== */
+    #screen-countdown { justify-content: center; align-items: center; gap: 12px; }
+    .countdown-num {
+      font-size: 180px; font-weight: 900; line-height: 1;
+      color: var(--color-accent-2);
+      text-shadow: 0 0 40px rgba(232, 165, 71, 0.6);
+      animation: countdown 1s ease forwards;
+    }
+    @keyframes countdown {
+      0%   { transform: scale(2); opacity: 0; }
+      40%  { transform: scale(1); opacity: 1; }
+      100% { transform: scale(0.6); opacity: 0; }
+    }
+    .countdown-label { opacity: 0.6; letter-spacing: 0.1em; font-size: 14px; }
+
+    /* ===== お題カード ===== */
+    #screen-card { gap: 16px; }
+    .card-paper {
+      width: 100%; padding: 22px; border-radius: 22px;
+      background: linear-gradient(160deg, #2D3A5C, #1B2845);
+      border: 1px solid rgba(232, 165, 71, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      animation: cardIn 0.4s ease;
+    }
+    @keyframes cardIn {
+      0%   { transform: rotateY(90deg) scale(0.7); opacity: 0; }
+      100% { transform: rotateY(0deg) scale(1); opacity: 1; }
+    }
+    .card-hashtag {
+      color: var(--color-accent-1); font-weight: 800; font-size: 22px;
+      letter-spacing: 0.05em; margin: 0 0 4px;
+    }
+    .card-category {
+      font-size: 11px; opacity: 0.6; letter-spacing: 0.1em;
+      text-transform: uppercase; margin: 0 0 16px;
+    }
+    .card-text { font-size: 17px; line-height: 1.6; margin: 0 0 16px; }
+    .card-targets {
+      padding: 12px; border-top: 1px dashed rgba(245, 230, 203, 0.2);
+      font-size: 13px;
+    }
+    .card-targets .lbl { opacity: 0.6; margin-right: 6px; }
+    .card-targets .target-chip {
+      display: inline-block; padding: 4px 10px; border-radius: 999px;
+      background: rgba(232, 165, 71, 0.2); color: var(--color-accent-2);
+      font-weight: 700; margin: 3px 4px 0 0; font-size: 12px;
+    }
+
+    /* ===== スキル発動ポップアップ ===== */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
+      display: none; align-items: center; justify-content: center;
+      padding: 24px; z-index: 100;
+    }
+    .modal-backdrop.is-open { display: flex; }
+    .modal-box {
+      width: 100%; max-width: 360px;
+      background: var(--color-bg-secondary); border-radius: 20px;
+      border: 2px solid var(--color-accent-2);
+      padding: 24px; text-align: center;
+      animation: skillIn 0.3s ease;
+    }
+    @keyframes skillIn {
+      0% { transform: scale(0.3); opacity: 0; }
+      60% { transform: scale(1.08); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .modal-box .icon  { font-size: 36px; }
+    .modal-box .label { color: var(--color-accent-2); font-weight: 800; letter-spacing: 0.1em; font-size: 13px; }
+    .modal-box .char-emoji  { font-size: 64px; line-height: 1; margin: 8px 0; }
+    .modal-box .skill-name  { font-size: 20px; font-weight: 800; }
+    .modal-box .catchphrase { font-style: italic; opacity: 0.85; margin: 10px 0; }
+    .modal-box .skill-desc  { font-size: 13px; opacity: 0.8; margin: 8px 0 16px; }
+    .modal-box .remaining   { font-size: 11px; opacity: 0.6; margin-bottom: 14px; }
+
+    /* ===== 渡す演出 ===== */
+    #screen-handover { justify-content: center; gap: 18px; }
+    .handover-arrow {
+      font-size: 80px; color: var(--color-accent-2);
+      animation: handover 1s ease forwards;
+    }
+    @keyframes handover {
+      0%   { transform: translateX(-60px); opacity: 0; }
+      60%  { transform: translateX(0);    opacity: 1; }
+      100% { transform: translateX(20px); opacity: 1; }
+    }
+    .handover-name { font-size: 24px; font-weight: 800; }
+    .handover-char { font-size: 14px; opacity: 0.7; }
+
+    /* ===== 終了画面（スタッツ） ===== */
+    .ranking { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+    .ranking .row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px; background: var(--color-bg-secondary); border-radius: 12px;
+    }
+    .ranking .rank {
+      font-weight: 800; min-width: 38px; color: var(--color-accent-2);
+    }
+    .ranking .row.rank-1 { border-left: 4px solid #FFD700; }
+    .ranking .row.rank-2 { border-left: 4px solid #C0C0C0; }
+    .ranking .row.rank-3 { border-left: 4px solid #CD7F32; }
+    .ranking .emoji { font-size: 24px; }
+    .ranking .name  { flex: 1; font-weight: 600; }
+    .ranking .count { font-weight: 800; }
+
+    .master-message {
+      width: 100%; padding: 20px;
+      background: linear-gradient(180deg, rgba(232, 165, 71, 0.15), transparent);
+      border-left: 3px solid var(--color-accent-2);
+      border-radius: 6px;
+      margin-top: 8px;
+    }
+    .master-message .title {
+      font-size: 12px; opacity: 0.7; letter-spacing: 0.1em; margin-bottom: 8px;
+    }
+    .master-message p { margin: 0 0 6px; line-height: 1.7; font-size: 14px; }
+    .master-message .sign { text-align: right; opacity: 0.7; font-size: 12px; }
+
+    /* ===== メニュー / リセット確認モーダル ===== */
+    .modal-box.menu, .modal-box.confirm {
+      border-color: rgba(245, 230, 203, 0.2);
+    }
+    .modal-box h3 { margin: 0 0 12px; font-size: 18px; }
+    .modal-box .desc { font-size: 13px; opacity: 0.7; margin-bottom: 16px; }
+
+    /* ===== フッター ===== */
+    .app-footer {
+      text-align: center; padding: 12px 16px;
+      font-size: 11px; opacity: 0.4; letter-spacing: 0.08em;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================ -->
+  <!-- 起動画面                                      -->
+  <!-- ============================================ -->
+  <section id="screen-launch" class="screen is-active" aria-label="起動画面">
+    <div class="launch-moon" aria-hidden="true">🌙</div>
+    <h1 class="launch-title">常連</h1>
+    <p class="launch-tagline">〜BARの常連たちと、今夜も飲もう〜</p>
+    <div class="launch-actions">
+      <button id="btn-start" class="btn btn-primary btn-block" type="button">はじめる</button>
+      <button id="btn-continue" class="btn btn-secondary btn-block" type="button" disabled>続きから</button>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- プレイヤー登録                                -->
+  <!-- ============================================ -->
+  <section id="screen-register" class="screen" aria-label="プレイヤー登録">
+    <h2 class="screen-heading">参加者を登録</h2>
+    <p class="screen-note">2〜8人まで。お名前を入れてね。</p>
+
+    <div id="player-list" class="player-list"></div>
+
+    <div class="actions" style="margin-top: 12px;">
+      <button id="btn-add-player" class="btn btn-secondary btn-block" type="button">+ 参加者を追加</button>
+    </div>
+
+    <div class="mode-select">
+      <label>
+        <input type="radio" name="mode" value="manual" />
+        <span>
+          <span class="label-title">自分で選ぶ</span>
+          <span class="label-desc">じゃんけん等で順番を決めて、一人ずつキャラを選ぶ</span>
+        </span>
+      </label>
+      <label>
+        <input type="radio" name="mode" value="random" checked />
+        <span>
+          <span class="label-title">ランダム抽選</span>
+          <span class="label-desc">アプリが各自にキャラを割り当てる</span>
+        </span>
+      </label>
+    </div>
+
+    <div class="actions">
+      <button id="btn-to-charselect" class="btn btn-primary btn-block" type="button">キャラ決定へ</button>
+      <button class="btn btn-ghost" type="button" data-back="launch">＜ 戻る</button>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- キャラ選択（手動モード）                       -->
+  <!-- ============================================ -->
+  <section id="screen-char-manual" class="screen" aria-label="キャラ選択（手動）">
+    <h2 class="screen-heading">キャラ選択</h2>
+    <p class="screen-note">じゃんけん等で順番を決めて、ひとりずつ選んでね。</p>
+
+    <div id="char-current-player" style="font-weight: 800; font-size: 18px; margin-bottom: 10px; color: var(--color-accent-2);"></div>
+
+    <div id="char-grid-manual" class="char-grid"></div>
+
+    <div class="selection-status">
+      <h3>選択状況</h3>
+      <ul id="char-selection-list"></ul>
+    </div>
+
+    <div class="actions">
+      <button id="btn-manual-next" class="btn btn-primary btn-block" type="button" disabled>ターン順発表へ</button>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- キャラ選択（ランダム抽選）                     -->
+  <!-- ============================================ -->
+  <section id="screen-char-random" class="screen" aria-label="キャラ選択（ランダム）">
+    <h2 class="screen-heading">ガチャ抽選</h2>
+    <p class="screen-note">アプリが各自のキャラを決めるよ。</p>
+
+    <div id="gacha-area" class="random-result"></div>
+
+    <div class="actions">
+      <button id="btn-random-roll"  class="btn btn-secondary btn-block" type="button">もう一回振る</button>
+      <button id="btn-random-decide" class="btn btn-primary btn-block" type="button">この組み合わせで決定</button>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- ターン順発表                                  -->
+  <!-- ============================================ -->
+  <section id="screen-turn-order" class="screen" aria-label="ターン順発表">
+    <h2 class="screen-heading">今夜のターン順</h2>
+    <p class="screen-note">最初の順番はランダム。以降はこの順番で進むよ。</p>
+
+    <div id="turn-list" class="turn-list"></div>
+
+    <div class="actions">
+      <button id="btn-game-start" class="btn btn-primary btn-block" type="button">ゲーム開始！</button>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- ゲームメイン                                  -->
+  <!-- ============================================ -->
+  <header id="game-topbar" class="topbar" style="display:none;">
+    <span class="title">🌙 常連</span>
+    <span id="round-label">Round 1</span>
+    <button id="btn-open-menu" class="menu-btn" type="button" aria-label="メニュー">⚙</button>
+  </header>
+
+  <section id="screen-game" class="screen" aria-label="ゲームメイン">
+    <div id="current-turn" class="current-turn-card">
+      <div class="label">現在のターン</div>
+      <div class="emoji" id="current-emoji">🍺</div>
+      <div class="player-name" id="current-name">プレイヤー</div>
+      <div class="char-name" id="current-char">キャラ</div>
+      <div class="round" id="current-round-info"></div>
+    </div>
+
+    <button id="btn-draw" class="btn draw-btn btn-block" type="button">🎴 カードを引く</button>
+
+    <div class="game-status">
+      <div class="stat">
+        <div class="num" id="stat-drink">0</div>
+        <div class="lbl">🍺 飲んだ</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="stat-skill">-</div>
+        <div class="lbl">⚡ スキル残</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="stat-turn">1</div>
+        <div class="lbl">ターン</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- 3秒カウントダウン                             -->
+  <!-- ============================================ -->
+  <section id="screen-countdown" class="screen" aria-label="カウントダウン">
+    <div id="countdown-num" class="countdown-num">3</div>
+    <div class="countdown-label">カードを引くよ...</div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- お題カード                                    -->
+  <!-- ============================================ -->
+  <section id="screen-card" class="screen" aria-label="お題カード">
+    <div class="card-paper">
+      <div id="card-hashtag" class="card-hashtag">#乾杯</div>
+      <div id="card-category" class="card-category">乾杯</div>
+      <div id="card-text" class="card-text"></div>
+      <div class="card-targets">
+        <span class="lbl">対象:</span>
+        <span id="card-targets-list"></span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="btn-card-execute" class="btn btn-primary btn-block" type="button">実行した（飲んだ）</button>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- 渡す演出                                      -->
+  <!-- ============================================ -->
+  <section id="screen-handover" class="screen" aria-label="次のプレイヤーへ">
+    <div class="handover-arrow">→</div>
+    <div class="handover-name" id="handover-name">次のプレイヤー</div>
+    <div class="handover-char" id="handover-char"></div>
+    <div class="actions">
+      <button id="btn-received" class="btn btn-primary btn-block" type="button">受け取った</button>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- 終了画面（スタッツ）                          -->
+  <!-- ============================================ -->
+  <section id="screen-result" class="screen" aria-label="終了画面">
+    <h2 class="screen-heading">🌙 今夜の常連</h2>
+
+    <div id="ranking" class="ranking"></div>
+
+    <div class="master-message">
+      <div class="title">マスターからの一言</div>
+      <p id="master-message-body"></p>
+      <div class="sign">── マスター</div>
+    </div>
+
+    <div class="actions">
+      <button id="btn-replay" class="btn btn-primary btn-block" type="button">もう一度プレイ</button>
+      <button id="btn-finish" class="btn btn-secondary btn-block" type="button">完全に終了</button>
+    </div>
+  </section>
+
+  <footer class="app-footer">JOREN v0.1.0 (Phase 1)</footer>
+
+  <!-- ============================================ -->
+  <!-- モーダル: スキル発動                          -->
+  <!-- ============================================ -->
+  <div id="modal-skill" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <div class="icon">⚡</div>
+      <div class="label">スキル発動チャンス</div>
+      <div class="char-emoji" id="skill-emoji">🍺</div>
+      <div class="skill-name" id="skill-name">スキル名</div>
+      <div class="catchphrase" id="skill-catchphrase">"決め台詞"</div>
+      <div class="skill-desc" id="skill-desc">スキル説明</div>
+      <div class="remaining" id="skill-remaining">残り 0 回</div>
+      <div class="actions">
+        <button id="btn-skill-use"  class="btn btn-primary btn-block" type="button">発動する</button>
+        <button id="btn-skill-pass" class="btn btn-secondary btn-block" type="button">パスする</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- モーダル: メニュー                            -->
+  <!-- ============================================ -->
+  <div id="modal-menu" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-box menu">
+      <h3>メニュー</h3>
+      <div class="actions">
+        <button id="btn-menu-finish" class="btn btn-primary btn-block" type="button">終了してスタッツへ</button>
+        <button id="btn-menu-reset"  class="btn btn-danger btn-block"  type="button">最初からやり直す</button>
+        <button id="btn-menu-close"  class="btn btn-ghost"             type="button">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- モーダル: リセット確認                        -->
+  <!-- ============================================ -->
+  <div id="modal-reset" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-box confirm">
+      <h3>リセットしますか？</h3>
+      <p class="desc">現在のゲームデータがすべて消えます。</p>
+      <div class="actions row">
+        <button id="btn-reset-cancel" class="btn btn-secondary" type="button">キャンセル</button>
+        <button id="btn-reset-do"     class="btn btn-danger"    type="button">リセット</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- データ                                        -->
+  <!-- ============================================ -->
+  <script src="data/characters.js"></script>
+  <script src="data/cards.js"></script>
+
+  <!-- ============================================ -->
+  <!-- アプリ本体                                    -->
+  <!-- ============================================ -->
+  <script>
+  'use strict';
+
+  // ===================================================
+  // 定数
+  // ===================================================
+  const STORAGE_KEYS = {
+    GAME_STATE: 'joren_game_state',
+    PLAYERS:    'joren_players',
+    CARD_HISTORY: 'joren_card_history',
+    CARD_DECK:  'joren_card_deck',
+    GAME_START_TIME: 'joren_game_start_time'
+  };
+
+  // 画像が未配置のため絵文字でキャラを表現
+  const CHARACTER_EMOJI = {
+    beer: '🍺',
+    wine: '🍷',
+    sake: '🍶',
+    cocktail: '🍸',
+    highball: '🥃',
+    yoppa: '🍻',
+    master: '🎩',
+    shirafu: '🥤'
+  };
+
+  const MAX_PLAYERS = 8;
+  const MIN_PLAYERS = 2;
+
+  // ===================================================
+  // 状態（メモリ + LocalStorage に永続化）
+  // ===================================================
+  const state = {
+    players: [],          // [{ id, name, characterId, drinkCount, skillUsedCount }]
+    deck: null,           // { remaining: [], used: [], totalDrawn: 0 }
+    history: [],          // [{ turn, timestamp, cardId, drawnBy, targets, drinkers, skillTriggered }]
+    currentPlayerIndex: 0,
+    currentTurn: 1,
+    pendingCard: null,    // 今引いたカード
+    pendingTargets: [],   // 今引いたカードの対象者ID配列
+    pendingSkillTriggers: [], // スキル発動候補
+    pendingSkillIndex: 0
+  };
+
+  // 手動キャラ選択モード用
+  const manualSelect = {
+    order: [],            // playerIDの選択順
+    currentIndex: 0
+  };
+
+  // ===================================================
+  // ユーティリティ
+  // ===================================================
+  function $(id) { return document.getElementById(id); }
+  function uid() { return 'p' + Math.random().toString(36).slice(2, 9); }
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function getCharacterById(id) {
+    return window.CHARACTERS.find((c) => c.id === id);
+  }
+
+  function getCardById(id) {
+    return window.CARDS.find((c) => c.id === id);
+  }
+
+  function emojiOf(player) {
+    if (!player || !player.characterId) return '👤';
+    return CHARACTER_EMOJI[player.characterId] || '👤';
+  }
+
+  function charNameOf(player) {
+    if (!player || !player.characterId) return '';
+    const c = getCharacterById(player.characterId);
+    return c ? c.name : '';
+  }
+
+  // ===================================================
+  // LocalStorage 永続化
+  // ===================================================
+  function saveAll() {
+    localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(state.players));
+    localStorage.setItem(STORAGE_KEYS.CARD_DECK, JSON.stringify(state.deck));
+    localStorage.setItem(STORAGE_KEYS.CARD_HISTORY, JSON.stringify(state.history));
+    localStorage.setItem(STORAGE_KEYS.GAME_STATE, JSON.stringify({
+      status: 'playing',
+      currentTurn: state.currentTurn,
+      currentPlayerIndex: state.currentPlayerIndex
+    }));
+  }
+
+  function loadAll() {
+    try {
+      state.players = JSON.parse(localStorage.getItem(STORAGE_KEYS.PLAYERS) || '[]');
+      state.deck    = JSON.parse(localStorage.getItem(STORAGE_KEYS.CARD_DECK) || 'null');
+      state.history = JSON.parse(localStorage.getItem(STORAGE_KEYS.CARD_HISTORY) || '[]');
+      const gs = JSON.parse(localStorage.getItem(STORAGE_KEYS.GAME_STATE) || 'null');
+      if (gs) {
+        state.currentTurn = gs.currentTurn || 1;
+        state.currentPlayerIndex = gs.currentPlayerIndex || 0;
+      }
+      return !!(gs && gs.status === 'playing' && state.players.length > 0);
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function resetAll() {
+    Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k));
+    state.players = [];
+    state.deck = null;
+    state.history = [];
+    state.currentPlayerIndex = 0;
+    state.currentTurn = 1;
+    state.pendingCard = null;
+    state.pendingTargets = [];
+    state.pendingSkillTriggers = [];
+  }
+
+  // ===================================================
+  // 画面切替
+  // ===================================================
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach((el) => {
+      el.classList.toggle('is-active', el.id === id);
+    });
+    // ゲーム系画面では topbar 表示
+    const gameScreens = ['screen-game', 'screen-countdown', 'screen-card', 'screen-handover'];
+    $('game-topbar').style.display = gameScreens.includes(id) ? 'flex' : 'none';
+    window.scrollTo(0, 0);
+  }
+
+  // ===================================================
+  // 起動画面
+  // ===================================================
+  function initLaunch() {
+    $('btn-continue').disabled = !hasSavedGame();
+    $('btn-start').addEventListener('click', () => {
+      // 新規ゲーム開始（一旦リセットして登録画面へ）
+      resetAll();
+      renderRegister();
+      showScreen('screen-register');
+    });
+    $('btn-continue').addEventListener('click', () => {
+      if (loadAll()) {
+        startGameLoop();
+      }
+    });
+  }
+
+  function hasSavedGame() {
+    try {
+      const gs = JSON.parse(localStorage.getItem(STORAGE_KEYS.GAME_STATE) || 'null');
+      return !!(gs && gs.status === 'playing');
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  // ===================================================
+  // プレイヤー登録
+  // ===================================================
+  let registerPlayers = []; // 一時的な編集用 [{ id, name }]
+
+  function renderRegister() {
+    if (registerPlayers.length === 0) {
+      registerPlayers = [
+        { id: uid(), name: '' },
+        { id: uid(), name: '' }
+      ];
+    }
+    const list = $('player-list');
+    list.innerHTML = '';
+    registerPlayers.forEach((p, idx) => {
+      const row = document.createElement('div');
+      row.className = 'player-row';
+      row.innerHTML = `
+        <span class="player-num">${idx + 1}.</span>
+        <input type="text" placeholder="参加者${idx + 1}" maxlength="12" value="${escapeHtml(p.name)}" data-id="${p.id}" />
+        <button class="remove-btn" type="button" data-remove="${p.id}" aria-label="削除">×</button>
+      `;
+      list.appendChild(row);
+    });
+    list.querySelectorAll('input[type="text"]').forEach((inp) => {
+      inp.addEventListener('input', (e) => {
+        const id = e.target.dataset.id;
+        const p = registerPlayers.find((x) => x.id === id);
+        if (p) p.name = e.target.value;
+      });
+    });
+    list.querySelectorAll('[data-remove]').forEach((b) => {
+      b.addEventListener('click', (e) => {
+        if (registerPlayers.length <= MIN_PLAYERS) {
+          alert('最低' + MIN_PLAYERS + '人必要だよ。');
+          return;
+        }
+        const id = b.dataset.remove;
+        registerPlayers = registerPlayers.filter((x) => x.id !== id);
+        renderRegister();
+      });
+    });
+    $('btn-add-player').disabled = registerPlayers.length >= MAX_PLAYERS;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function initRegister() {
+    $('btn-add-player').addEventListener('click', () => {
+      if (registerPlayers.length >= MAX_PLAYERS) return;
+      registerPlayers.push({ id: uid(), name: '' });
+      renderRegister();
+    });
+    $('btn-to-charselect').addEventListener('click', () => {
+      // バリデーション
+      const cleaned = registerPlayers
+        .map((p) => ({ id: p.id, name: (p.name || '').trim() }))
+        .filter((p) => p.name.length > 0);
+      if (cleaned.length < MIN_PLAYERS) {
+        alert('最低' + MIN_PLAYERS + '人の名前を入れてね。');
+        return;
+      }
+      const names = cleaned.map((p) => p.name);
+      if (new Set(names).size !== names.length) {
+        alert('同じ名前の人がいるよ。区別できる名前にしてね。');
+        return;
+      }
+      // 仮登録（characterId は後で割り当て）
+      state.players = cleaned.map((p) => ({
+        id: p.id,
+        name: p.name,
+        characterId: null,
+        drinkCount: 0,
+        skillUsedCount: 0
+      }));
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+      if (mode === 'manual') {
+        startManualSelect();
+      } else {
+        startRandomSelect();
+      }
+    });
+    // 戻るボタン
+    document.querySelectorAll('[data-back]').forEach((b) => {
+      b.addEventListener('click', () => showScreen('screen-' + b.dataset.back));
+    });
+  }
+
+  // ===================================================
+  // キャラ選択（手動）
+  // ===================================================
+  function startManualSelect() {
+    // プレイヤーをランダム順で選ばせる（じゃんけん前提だが順番だけはアプリが提示）
+    manualSelect.order = shuffle(state.players.map((p) => p.id));
+    manualSelect.currentIndex = 0;
+    state.players.forEach((p) => { p.characterId = null; });
+    renderManualSelect();
+    showScreen('screen-char-manual');
+  }
+
+  function renderManualSelect() {
+    const takenIds = state.players.filter((p) => p.characterId).map((p) => p.characterId);
+    const allDone = manualSelect.currentIndex >= manualSelect.order.length;
+    const currentPlayerId = !allDone ? manualSelect.order[manualSelect.currentIndex] : null;
+    const currentPlayer = currentPlayerId ? state.players.find((p) => p.id === currentPlayerId) : null;
+
+    $('char-current-player').textContent = allDone
+      ? '✓ 全員選び終わりました！'
+      : `${currentPlayer.name} さんの番です`;
+
+    const grid = $('char-grid-manual');
+    grid.innerHTML = '';
+    window.CHARACTERS.forEach((c) => {
+      const isTaken = takenIds.includes(c.id);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'char-card' + (isTaken ? ' is-taken' : '');
+      btn.disabled = isTaken || allDone;
+      btn.innerHTML = `
+        <span class="emoji">${CHARACTER_EMOJI[c.id]}</span>
+        <span class="name">${c.name}</span>
+      `;
+      btn.addEventListener('click', () => {
+        if (!currentPlayer || isTaken) return;
+        currentPlayer.characterId = c.id;
+        manualSelect.currentIndex++;
+        renderManualSelect();
+      });
+      grid.appendChild(btn);
+    });
+
+    // 選択状況
+    const ul = $('char-selection-list');
+    ul.innerHTML = '';
+    manualSelect.order.forEach((pid, idx) => {
+      const p = state.players.find((x) => x.id === pid);
+      const ch = p.characterId ? getCharacterById(p.characterId) : null;
+      const li = document.createElement('li');
+      if (idx === manualSelect.currentIndex && !allDone) li.className = 'current';
+      li.textContent = `${idx + 1}. ${p.name} → ${ch ? CHARACTER_EMOJI[ch.id] + ' ' + ch.name : '？'}`;
+      ul.appendChild(li);
+    });
+
+    $('btn-manual-next').disabled = !allDone;
+  }
+
+  function initCharManual() {
+    $('btn-manual-next').addEventListener('click', () => {
+      finalizeCharacters();
+    });
+  }
+
+  // ===================================================
+  // キャラ選択（ランダム）
+  // ===================================================
+  function startRandomSelect() {
+    rollRandom();
+    showScreen('screen-char-random');
+  }
+
+  function rollRandom() {
+    const charIds = shuffle(window.CHARACTERS.map((c) => c.id));
+    state.players.forEach((p, idx) => {
+      p.characterId = charIds[idx]; // 8キャラ > 最大8人なのでOK
+    });
+    renderRandomResult();
+  }
+
+  function renderRandomResult() {
+    const area = $('gacha-area');
+    area.innerHTML = '';
+    state.players.forEach((p) => {
+      const ch = getCharacterById(p.characterId);
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `
+        <span class="name">${escapeHtml(p.name)}</span>
+        <span class="arrow">→</span>
+        <span class="emoji">${CHARACTER_EMOJI[ch.id]}</span>
+        <span class="char-name">${ch.name}</span>
+      `;
+      area.appendChild(row);
+    });
+  }
+
+  function initCharRandom() {
+    $('btn-random-roll').addEventListener('click', rollRandom);
+    $('btn-random-decide').addEventListener('click', finalizeCharacters);
+  }
+
+  // ===================================================
+  // ターン順発表
+  // ===================================================
+  function finalizeCharacters() {
+    // ターン順を最初ランダムに
+    state.players = shuffle(state.players);
+    state.currentPlayerIndex = 0;
+    state.currentTurn = 1;
+    // デッキ初期化
+    state.deck = {
+      remaining: shuffle(window.CARDS.map((c) => c.id)),
+      used: [],
+      totalDrawn: 0
+    };
+    state.history = [];
+    saveAll();
+    renderTurnOrder();
+    showScreen('screen-turn-order');
+  }
+
+  function renderTurnOrder() {
+    const list = $('turn-list');
+    list.innerHTML = '';
+    state.players.forEach((p, idx) => {
+      const ch = getCharacterById(p.characterId);
+      const row = document.createElement('div');
+      row.className = 'turn-row';
+      row.innerHTML = `
+        <span class="num">${idx + 1}</span>
+        <span class="emoji">${CHARACTER_EMOJI[ch.id]}</span>
+        <span class="player-name">${escapeHtml(p.name)}</span>
+        <span class="char-name">${ch.name}</span>
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  function initTurnOrder() {
+    $('btn-game-start').addEventListener('click', startGameLoop);
+  }
+
+  // ===================================================
+  // ゲーム本体
+  // ===================================================
+  function startGameLoop() {
+    renderCurrentTurn();
+    showScreen('screen-game');
+  }
+
+  function currentPlayer() {
+    return state.players[state.currentPlayerIndex];
+  }
+
+  function renderCurrentTurn() {
+    const p = currentPlayer();
+    const ch = getCharacterById(p.characterId);
+    $('current-emoji').textContent = CHARACTER_EMOJI[ch.id];
+    $('current-name').textContent  = p.name;
+    $('current-char').textContent  = ch.name + ' - ' + ch.catchphrase;
+    $('current-round-info').textContent = 'Round ' + state.currentTurn;
+    $('round-label').textContent = 'Round ' + state.currentTurn;
+    $('stat-drink').textContent = p.drinkCount;
+    $('stat-skill').textContent = ch.skill.maxUses >= 999
+      ? '∞'
+      : (ch.skill.maxUses - p.skillUsedCount) + '/' + ch.skill.maxUses;
+    $('stat-turn').textContent = state.currentTurn;
+  }
+
+  // ===================================================
+  // カード抽選 + 3秒カウントダウン
+  // ===================================================
+  function startDraw() {
+    runCountdown(3, () => {
+      const card = drawCard();
+      state.pendingCard = card;
+      state.pendingTargets = determineTargets(card, state.players, currentPlayer().id);
+      state.pendingSkillTriggers = checkSkillTriggers(card);
+      state.pendingSkillIndex = 0;
+      renderCard(card);
+      showScreen('screen-card');
+      processNextSkillTrigger();
+    });
+  }
+
+  function runCountdown(n, done) {
+    showScreen('screen-countdown');
+    const elem = $('countdown-num');
+    let count = n;
+    const tick = () => {
+      if (count <= 0) { done(); return; }
+      elem.textContent = String(count);
+      // アニメーション再適用
+      elem.style.animation = 'none';
+      void elem.offsetHeight;
+      elem.style.animation = '';
+      count--;
+      setTimeout(tick, 1000);
+    };
+    tick();
+  }
+
+  function drawCard() {
+    if (!state.deck.remaining || state.deck.remaining.length === 0) {
+      // SPEC §6.1: 全カード使い切ったらシャッフルし直し
+      state.deck.remaining = shuffle(window.CARDS.map((c) => c.id));
+      state.deck.used = [];
+    }
+    const idx = Math.floor(Math.random() * state.deck.remaining.length);
+    const cardId = state.deck.remaining[idx];
+    state.deck.remaining.splice(idx, 1);
+    state.deck.used.push(cardId);
+    state.deck.totalDrawn++;
+    return getCardById(cardId);
+  }
+
+  // ===================================================
+  // 対象者判定（SPEC §6.2）
+  // ===================================================
+  function determineTargets(card, players, drawnBy) {
+    switch (card.targetType) {
+      case 'all':
+        return players.map((p) => p.id);
+      case 'tag': {
+        const matched = players.filter((p) => {
+          const ch = getCharacterById(p.characterId);
+          return card.targetTags.some((tag) => ch.tags.includes(tag));
+        });
+        if (matched.length === 0) return [drawnBy];
+        return matched.map((p) => p.id);
+      }
+      case 'random': {
+        // ペア・トリオは text から推定（最低1人）
+        let count = 1;
+        if (/3人/.test(card.text)) count = 3;
+        else if (/2人|ペア/.test(card.text)) count = 2;
+        const picked = shuffle(players).slice(0, Math.min(count, players.length));
+        return picked.map((p) => p.id);
+      }
+      case 'situation':
+        // 現場で選ばせる系。Phase 1 では引いた人を仮対象とし、画面で読み上げて手動運用
+        return [drawnBy];
+      case 'self':
+        return [drawnBy];
+      default:
+        return [drawnBy];
+    }
+  }
+
+  function renderCard(card) {
+    $('card-hashtag').textContent = card.hashtag;
+    $('card-category').textContent = card.category;
+    $('card-text').textContent = card.text;
+    const list = $('card-targets-list');
+    list.innerHTML = '';
+    if (card.targetType === 'situation') {
+      const chip = document.createElement('span');
+      chip.className = 'target-chip';
+      chip.textContent = '現場判断';
+      list.appendChild(chip);
+      const note = document.createElement('span');
+      note.style.opacity = '0.7';
+      note.style.fontSize = '12px';
+      note.textContent = ' ※対象は本文に従って決めてね';
+      list.appendChild(note);
+    } else {
+      state.pendingTargets.forEach((pid) => {
+        const p = state.players.find((x) => x.id === pid);
+        if (!p) return;
+        const chip = document.createElement('span');
+        chip.className = 'target-chip';
+        chip.textContent = `${CHARACTER_EMOJI[p.characterId]} ${p.name}`;
+        list.appendChild(chip);
+      });
+    }
+  }
+
+  // ===================================================
+  // スキル発動判定（SPEC §6.3）
+  // ===================================================
+  function checkSkillTriggers(card) {
+    const triggers = [];
+    state.players.forEach((p) => {
+      const ch = getCharacterById(p.characterId);
+      const skill = ch.skill;
+      const hit = card.triggerTags.some((tag) => skill.triggerTags.includes(tag));
+      const remaining = skill.maxUses - p.skillUsedCount;
+      if (hit && remaining > 0) {
+        triggers.push({ playerId: p.id, character: ch, remaining });
+      }
+    });
+    return triggers;
+  }
+
+  function processNextSkillTrigger() {
+    if (state.pendingSkillIndex >= state.pendingSkillTriggers.length) return;
+    const trig = state.pendingSkillTriggers[state.pendingSkillIndex];
+    showSkillModal(trig);
+  }
+
+  function showSkillModal(trig) {
+    const p = state.players.find((x) => x.id === trig.playerId);
+    $('skill-emoji').textContent = CHARACTER_EMOJI[trig.character.id];
+    $('skill-name').textContent  = trig.character.skill.name + '（' + p.name + '）';
+    $('skill-catchphrase').textContent = '"' + trig.character.catchphrase + '"';
+    $('skill-desc').textContent  = trig.character.skill.description;
+    $('skill-remaining').textContent = trig.character.skill.maxUses >= 999
+      ? '使用無制限'
+      : '残り ' + trig.remaining + ' 回';
+    $('modal-skill').classList.add('is-open');
+  }
+
+  function closeSkillModal() {
+    $('modal-skill').classList.remove('is-open');
+  }
+
+  function initSkillModal() {
+    $('btn-skill-use').addEventListener('click', () => {
+      const trig = state.pendingSkillTriggers[state.pendingSkillIndex];
+      const p = state.players.find((x) => x.id === trig.playerId);
+      if (trig.character.skill.maxUses < 999) p.skillUsedCount++;
+      // 発動した時、対象に当該プレイヤーを巻き込む（簡易ルール）
+      if (!state.pendingTargets.includes(p.id)) {
+        state.pendingTargets.push(p.id);
+        renderCard(state.pendingCard);
+      }
+      closeSkillModal();
+      state.pendingSkillIndex++;
+      processNextSkillTrigger();
+    });
+    $('btn-skill-pass').addEventListener('click', () => {
+      closeSkillModal();
+      state.pendingSkillIndex++;
+      processNextSkillTrigger();
+    });
+  }
+
+  // ===================================================
+  // 飲んだカウント & 履歴記録
+  // ===================================================
+  function executeCard() {
+    const card = state.pendingCard;
+    const drinkCount = card.drinkCount || 0;
+    const drinkers = [];
+    if (drinkCount > 0) {
+      state.pendingTargets.forEach((pid) => {
+        const p = state.players.find((x) => x.id === pid);
+        if (!p) return;
+        p.drinkCount += drinkCount;
+        drinkers.push(pid);
+      });
+    }
+    state.history.push({
+      turn: state.currentTurn,
+      timestamp: Date.now(),
+      cardId: card.id,
+      drawnBy: currentPlayer().id,
+      targets: state.pendingTargets.slice(),
+      drinkers
+    });
+    saveAll();
+    showHandover();
+  }
+
+  // ===================================================
+  // 渡す演出
+  // ===================================================
+  function showHandover() {
+    // 次のプレイヤーへ進める前に、誰へ渡すかを表示
+    state.currentPlayerIndex = (state.currentPlayerIndex + 1) % state.players.length;
+    if (state.currentPlayerIndex === 0) state.currentTurn++;
+    const next = currentPlayer();
+    const ch = getCharacterById(next.characterId);
+    $('handover-name').textContent = '→ ' + next.name + ' さんへ';
+    $('handover-char').textContent = CHARACTER_EMOJI[ch.id] + ' ' + ch.name;
+    showScreen('screen-handover');
+  }
+
+  function initHandover() {
+    $('btn-received').addEventListener('click', () => {
+      saveAll();
+      renderCurrentTurn();
+      showScreen('screen-game');
+    });
+  }
+
+  // ===================================================
+  // 終了画面（スタッツ）
+  // ===================================================
+  function showResult() {
+    const ranked = state.players.slice().sort((a, b) => b.drinkCount - a.drinkCount);
+    const list = $('ranking');
+    list.innerHTML = '';
+    ranked.forEach((p, idx) => {
+      const ch = getCharacterById(p.characterId);
+      const row = document.createElement('div');
+      row.className = 'row rank-' + (idx + 1);
+      row.innerHTML = `
+        <span class="rank">${idx + 1}位</span>
+        <span class="emoji">${CHARACTER_EMOJI[ch.id]}</span>
+        <span class="name">${escapeHtml(p.name)}<br><small style="opacity:0.6;font-size:11px;">${ch.name}</small></span>
+        <span class="count">${p.drinkCount} 回</span>
+      `;
+      list.appendChild(row);
+    });
+    $('master-message-body').innerHTML =
+      '今夜もよく飲みましたね。<br>' +
+      '気をつけてお帰りを。<br>' +
+      'また、ここでお待ちしています。';
+    // ゲーム状態を finished に更新（続きから は無効）
+    localStorage.setItem(STORAGE_KEYS.GAME_STATE, JSON.stringify({ status: 'finished' }));
+    showScreen('screen-result');
+  }
+
+  function initResult() {
+    $('btn-replay').addEventListener('click', () => {
+      // プレイヤーとキャラはそのまま、カウントだけリセット
+      state.players.forEach((p) => { p.drinkCount = 0; p.skillUsedCount = 0; });
+      state.deck = {
+        remaining: shuffle(window.CARDS.map((c) => c.id)),
+        used: [],
+        totalDrawn: 0
+      };
+      state.history = [];
+      state.currentTurn = 1;
+      state.currentPlayerIndex = 0;
+      saveAll();
+      startGameLoop();
+    });
+    $('btn-finish').addEventListener('click', () => {
+      resetAll();
+      $('btn-continue').disabled = true;
+      showScreen('screen-launch');
+    });
+  }
+
+  // ===================================================
+  // メニュー / リセット
+  // ===================================================
+  function initMenu() {
+    $('btn-open-menu').addEventListener('click', () => $('modal-menu').classList.add('is-open'));
+    $('btn-menu-close').addEventListener('click', () => $('modal-menu').classList.remove('is-open'));
+    $('btn-menu-finish').addEventListener('click', () => {
+      $('modal-menu').classList.remove('is-open');
+      showResult();
+    });
+    $('btn-menu-reset').addEventListener('click', () => {
+      $('modal-menu').classList.remove('is-open');
+      $('modal-reset').classList.add('is-open');
+    });
+    $('btn-reset-cancel').addEventListener('click', () => $('modal-reset').classList.remove('is-open'));
+    $('btn-reset-do').addEventListener('click', () => {
+      resetAll();
+      $('modal-reset').classList.remove('is-open');
+      $('btn-continue').disabled = true;
+      showScreen('screen-launch');
+    });
+  }
+
+  // ===================================================
+  // 起動
+  // ===================================================
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!window.CHARACTERS || !window.CARDS) {
+      alert('データの読み込みに失敗しました。data/characters.js と data/cards.js を確認してください。');
+      return;
+    }
+    initLaunch();
+    initRegister();
+    initCharManual();
+    initCharRandom();
+    initTurnOrder();
+    initSkillModal();
+    initHandover();
+    initResult();
+    initMenu();
+    $('btn-draw').addEventListener('click', startDraw);
+    $('btn-card-execute').addEventListener('click', executeCard);
+    console.log(`[常連] characters: ${window.CHARACTERS.length}, cards: ${window.CARDS.length}`);
+  });
+  </script>
+</body>
+</html>
