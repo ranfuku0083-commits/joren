@@ -301,6 +301,74 @@
       color: var(--color-accent-2); opacity: 0.85;
     }
 
+    /* ===== ミッションタイマー ===== */
+    .active-timers {
+      width: 100%; max-width: 480px;
+      margin: 0 auto; padding: 4px 12px 0;
+    }
+    .timer-row {
+      background: rgba(45, 58, 92, 0.92);
+      border: 1px solid var(--color-accent-2);
+      border-radius: 12px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 8px;
+      position: relative; overflow: hidden;
+      font-size: 13px;
+    }
+    .timer-progress-fill {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      background: rgba(232, 165, 71, 0.18);
+      transition: width 0.9s linear;
+      pointer-events: none;
+    }
+    .timer-row > * { position: relative; z-index: 1; }
+    .timer-hashtag {
+      font-weight: 700; color: var(--color-accent-2);
+      flex: 1; min-width: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .timer-remaining {
+      font-variant-numeric: tabular-nums; font-weight: 800;
+      letter-spacing: 0.05em; min-width: 52px; text-align: right;
+    }
+    .timer-violate {
+      background: var(--color-danger); color: #fff; border: 0;
+      padding: 6px 10px; border-radius: 8px; font-weight: 700;
+      font-size: 11px; cursor: pointer; font-family: inherit;
+    }
+    .timer-violate:active { transform: scale(0.95); }
+    .timer-close {
+      background: transparent; border: 0; color: var(--color-text-primary);
+      opacity: 0.5; font-size: 18px; padding: 0 4px; cursor: pointer;
+      line-height: 1;
+    }
+    .timer-close:hover { opacity: 1; }
+    .timer-row.expired {
+      border-color: var(--color-danger);
+      animation: timer-flash 0.9s ease 3;
+    }
+    .timer-row.expired .timer-remaining { color: var(--color-danger); }
+    @keyframes timer-flash {
+      0%, 100% { background: rgba(45, 58, 92, 0.92); }
+      50% { background: rgba(231, 76, 60, 0.45); }
+    }
+
+    /* 違反者選択モーダル */
+    .violate-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+      margin: 12px 0;
+    }
+    .violate-player {
+      background: var(--color-bg-primary); border: 1px solid rgba(245, 230, 203, 0.15);
+      color: var(--color-text-primary); cursor: pointer; font-family: inherit;
+      padding: 10px 8px; border-radius: 10px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; min-height: 56px;
+    }
+    .violate-player:active { transform: scale(0.97); }
+    .violate-player .name { font-weight: 700; flex: 1; text-align: left; }
+
     /* ===== スキル発動ポップアップ ===== */
     .modal-backdrop {
       position: fixed; inset: 0;
@@ -514,6 +582,11 @@
     <button id="btn-open-menu" class="menu-btn" type="button" aria-label="メニュー">⚙</button>
   </header>
 
+  <!-- ============================================ -->
+  <!-- ミッションタイマー（常駐）                    -->
+  <!-- ============================================ -->
+  <div id="active-timers" class="active-timers" style="display:none;" aria-live="polite"></div>
+
   <section id="screen-game" class="screen" aria-label="ゲームメイン">
     <div id="current-turn" class="current-turn-card">
       <div class="label">現在のターン</div>
@@ -636,6 +709,18 @@
   </div>
 
   <!-- ============================================ -->
+  <!-- モーダル: 違反者選択（ミッションタイマー用）   -->
+  <!-- ============================================ -->
+  <div id="modal-violate" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-box menu">
+      <h3>違反した人を選んで</h3>
+      <p class="desc" id="violate-mission-text"></p>
+      <div id="violate-player-list" class="violate-grid"></div>
+      <button id="btn-violate-cancel" class="btn btn-ghost btn-block" type="button">キャンセル</button>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
   <!-- モーダル: リセット確認                        -->
   <!-- ============================================ -->
   <div id="modal-reset" class="modal-backdrop" role="dialog" aria-modal="true">
@@ -669,8 +754,15 @@
     PLAYERS:    'joren_players',
     CARD_HISTORY: 'joren_card_history',
     CARD_DECK:  'joren_card_deck',
-    GAME_START_TIME: 'joren_game_start_time'
+    GAME_START_TIME: 'joren_game_start_time',
+    ACTIVE_TIMERS: 'joren_active_timers'
   };
+
+  // ?fasttimer=1 で duration を 1/10 に短縮（デバッグ用）
+  const FAST_TIMER = (function() {
+    try { return new URLSearchParams(location.search).get('fasttimer') === '1'; }
+    catch (_e) { return false; }
+  })();
 
   // 画像が未配置のため絵文字でキャラを表現
   const CHARACTER_EMOJI = {
@@ -700,8 +792,14 @@
     pendingTargets: [],   // 今引いたカードの対象者ID配列
     pendingFallback: false, // 該当者不足で引いた人にフォールバックしたか
     pendingSkillTriggers: [], // スキル発動候補
-    pendingSkillIndex: 0
+    pendingSkillIndex: 0,
+    activeTimers: [],     // [{ id, cardId, hashtag, text, duration, endsAt, alarmTriggered }]
+    pendingViolateTimerId: null // 違反者選択モーダル展開中のタイマーID
   };
+
+  // Web Audio API（アラーム用）
+  let audioCtx = null;
+  let timerTickHandle = null;
 
   // 手動キャラ選択モード用
   const manualSelect = {
@@ -757,6 +855,7 @@
     localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(state.players));
     localStorage.setItem(STORAGE_KEYS.CARD_DECK, JSON.stringify(state.deck));
     localStorage.setItem(STORAGE_KEYS.CARD_HISTORY, JSON.stringify(state.history));
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_TIMERS, JSON.stringify(state.activeTimers));
     localStorage.setItem(STORAGE_KEYS.GAME_STATE, JSON.stringify({
       status: 'playing',
       currentTurn: state.currentTurn,
@@ -769,6 +868,11 @@
       state.players = JSON.parse(localStorage.getItem(STORAGE_KEYS.PLAYERS) || '[]');
       state.deck    = JSON.parse(localStorage.getItem(STORAGE_KEYS.CARD_DECK) || 'null');
       state.history = JSON.parse(localStorage.getItem(STORAGE_KEYS.CARD_HISTORY) || '[]');
+      state.activeTimers = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACTIVE_TIMERS) || '[]');
+      // 復帰時にすでに終了済みのタイマーはアラーム済みフラグを立てて再鳴動を防ぐ
+      const now = Date.now();
+      state.activeTimers.forEach((t) => { if (now >= t.endsAt) t.alarmTriggered = true; });
+      if (state.activeTimers.length > 0) ensureTimerTickLoop();
       const gs = JSON.parse(localStorage.getItem(STORAGE_KEYS.GAME_STATE) || 'null');
       if (gs) {
         state.currentTurn = gs.currentTurn || 1;
@@ -790,6 +894,7 @@
     state.pendingCard = null;
     state.pendingTargets = [];
     state.pendingSkillTriggers = [];
+    clearAllTimers();
   }
 
   // ===================================================
@@ -802,6 +907,7 @@
     // ゲーム系画面では topbar 表示
     const gameScreens = ['screen-game', 'screen-countdown', 'screen-card', 'screen-handover'];
     $('game-topbar').style.display = gameScreens.includes(id) ? 'flex' : 'none';
+    renderActiveTimers();
     window.scrollTo(0, 0);
   }
 
@@ -1301,8 +1407,203 @@
       targets: state.pendingTargets.slice(),
       drinkers
     });
+    // ミッション系カード（duration あり）はタイマーを開始
+    if (card.duration && card.duration > 0) {
+      startMissionTimer(card);
+    }
     saveAll();
     showHandover();
+  }
+
+  // ===================================================
+  // ミッションタイマー
+  // ===================================================
+  function ensureAudioContext() {
+    try {
+      if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx) audioCtx = new Ctx();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+    } catch (_e) {}
+  }
+
+  function playAlarmBeep() {
+    if (!audioCtx) return;
+    try {
+      const ctx = audioCtx;
+      const baseTime = ctx.currentTime;
+      const schedule = [
+        { t: 0.00, dur: 0.15, freq: 880 },
+        { t: 0.30, dur: 0.15, freq: 880 },
+        { t: 0.60, dur: 0.15, freq: 880 },
+        { t: 1.00, dur: 0.60, freq: 660 }
+      ];
+      schedule.forEach((s) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = s.freq;
+        gain.gain.setValueAtTime(0, baseTime + s.t);
+        gain.gain.linearRampToValueAtTime(0.3, baseTime + s.t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, baseTime + s.t + s.dur);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(baseTime + s.t);
+        osc.stop(baseTime + s.t + s.dur + 0.05);
+      });
+    } catch (_e) {}
+  }
+
+  function startMissionTimer(card) {
+    const dur = FAST_TIMER
+      ? Math.max(3, Math.round(card.duration / 10))
+      : card.duration;
+    state.activeTimers.push({
+      id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      cardId: card.id,
+      hashtag: card.hashtag,
+      text: card.text,
+      duration: dur,
+      endsAt: Date.now() + dur * 1000,
+      alarmTriggered: false
+    });
+    ensureTimerTickLoop();
+    renderActiveTimers();
+  }
+
+  function ensureTimerTickLoop() {
+    if (timerTickHandle) return;
+    timerTickHandle = setInterval(timerTick, 1000);
+  }
+
+  function stopTimerTickLoop() {
+    if (timerTickHandle) {
+      clearInterval(timerTickHandle);
+      timerTickHandle = null;
+    }
+  }
+
+  function timerTick() {
+    if (state.activeTimers.length === 0) {
+      stopTimerTickLoop();
+      renderActiveTimers();
+      return;
+    }
+    const now = Date.now();
+    let needsSave = false;
+    state.activeTimers.forEach((t) => {
+      if (!t.alarmTriggered && now >= t.endsAt) {
+        t.alarmTriggered = true;
+        needsSave = true;
+        playAlarmBeep();
+      }
+    });
+    renderActiveTimers();
+    if (needsSave) saveAll();
+  }
+
+  function renderActiveTimers() {
+    const wrap = $('active-timers');
+    const gameScreens = ['screen-game', 'screen-countdown', 'screen-card', 'screen-handover'];
+    const onGameScreen = gameScreens.some((id) => $(id).classList.contains('is-active'));
+    if (state.activeTimers.length === 0 || !onGameScreen) {
+      wrap.style.display = 'none';
+      wrap.innerHTML = '';
+      return;
+    }
+    wrap.style.display = 'block';
+    const now = Date.now();
+    wrap.innerHTML = state.activeTimers.map((t) => {
+      const remainingMs = t.endsAt - now;
+      const isExpired = remainingMs <= 0;
+      const remSec = Math.max(0, Math.ceil(remainingMs / 1000));
+      const mm = String(Math.floor(remSec / 60)).padStart(2, '0');
+      const ss = String(remSec % 60).padStart(2, '0');
+      const totalMs = t.duration * 1000;
+      const consumed = Math.min(1, Math.max(0, 1 - remainingMs / totalMs));
+      return `
+        <div class="timer-row ${isExpired ? 'expired' : ''}" data-id="${t.id}">
+          <div class="timer-progress-fill" style="width: ${(consumed * 100).toFixed(1)}%;"></div>
+          <span class="timer-hashtag">${escapeHtml(t.hashtag)}</span>
+          <span class="timer-remaining">${isExpired ? '終了' : (mm + ':' + ss)}</span>
+          <button class="timer-violate" type="button" data-violate="${t.id}">違反した</button>
+          <button class="timer-close" type="button" data-close="${t.id}" aria-label="閉じる">×</button>
+        </div>
+      `;
+    }).join('');
+    wrap.querySelectorAll('[data-violate]').forEach((b) => {
+      b.addEventListener('click', () => openViolateModal(b.dataset.violate));
+    });
+    wrap.querySelectorAll('[data-close]').forEach((b) => {
+      b.addEventListener('click', () => {
+        state.activeTimers = state.activeTimers.filter((t) => t.id !== b.dataset.close);
+        saveAll();
+        if (state.activeTimers.length === 0) stopTimerTickLoop();
+        renderActiveTimers();
+      });
+    });
+  }
+
+  function clearAllTimers() {
+    state.activeTimers = [];
+    stopTimerTickLoop();
+    renderActiveTimers();
+  }
+
+  // ===================================================
+  // 違反者選択モーダル
+  // ===================================================
+  function openViolateModal(timerId) {
+    const t = state.activeTimers.find((x) => x.id === timerId);
+    if (!t) return;
+    state.pendingViolateTimerId = timerId;
+    $('violate-mission-text').textContent = t.hashtag + ' — ' + t.text;
+    const list = $('violate-player-list');
+    list.innerHTML = '';
+    state.players.forEach((p) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'violate-player';
+      btn.innerHTML = `${charImg(p.characterId, 'char-img-md')}<span class="name">${escapeHtml(p.name)}</span>`;
+      btn.addEventListener('click', () => recordViolation(p.id));
+      list.appendChild(btn);
+    });
+    $('modal-violate').classList.add('is-open');
+  }
+
+  function recordViolation(playerId) {
+    const t = state.activeTimers.find((x) => x.id === state.pendingViolateTimerId);
+    if (!t) return;
+    const p = state.players.find((x) => x.id === playerId);
+    if (!p) return;
+    p.drinkCount += 1;
+    state.history.push({
+      turn: state.currentTurn,
+      timestamp: Date.now(),
+      cardId: t.cardId,
+      drawnBy: null,
+      targets: [playerId],
+      drinkers: [playerId],
+      missionViolation: true,
+      timerId: t.id
+    });
+    saveAll();
+    $('modal-violate').classList.remove('is-open');
+    state.pendingViolateTimerId = null;
+    // ゲームメイン表示中なら統計を更新
+    if ($('screen-game').classList.contains('is-active')) {
+      renderCurrentTurn();
+    }
+    renderActiveTimers();
+  }
+
+  function initViolateModal() {
+    $('btn-violate-cancel').addEventListener('click', () => {
+      $('modal-violate').classList.remove('is-open');
+      state.pendingViolateTimerId = null;
+    });
   }
 
   // ===================================================
@@ -1331,6 +1632,7 @@
   // 終了画面（スタッツ）
   // ===================================================
   function showResult() {
+    clearAllTimers();
     const ranked = state.players.slice().sort((a, b) => b.drinkCount - a.drinkCount);
     const list = $('ranking');
     list.innerHTML = '';
@@ -1417,9 +1719,12 @@
     initHandover();
     initResult();
     initMenu();
-    $('btn-draw').addEventListener('click', startDraw);
+    initViolateModal();
+    $('btn-draw').addEventListener('click', () => { ensureAudioContext(); startDraw(); });
     $('btn-card-execute').addEventListener('click', executeCard);
-    console.log(`[常連] characters: ${window.CHARACTERS.length}, cards: ${window.CARDS.length}`);
+    // 最初のユーザー操作で AudioContext を起こす（iOS Safari 対策）
+    document.addEventListener('click', ensureAudioContext, { once: true, capture: true });
+    console.log(`[常連] characters: ${window.CHARACTERS.length}, cards: ${window.CARDS.length}, fastTimer: ${FAST_TIMER}`);
   });
   </script>
 </body>
