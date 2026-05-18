@@ -380,6 +380,70 @@
       background: rgba(245, 230, 203, 0.1); color: var(--color-text-primary);
     }
 
+    /* メニュー見出し */
+    .menu-section-title {
+      text-align: left; font-size: 11px; opacity: 0.55;
+      letter-spacing: 0.1em; margin: 14px 0 4px;
+      text-transform: uppercase;
+    }
+
+    /* ===== サブゲーム共通 ===== */
+    .sg-player { text-align: center; margin: 20px 0; }
+    .sg-player .name { font-size: 22px; font-weight: 800; margin-top: 8px; }
+    .sg-cards {
+      display: flex; justify-content: center; gap: 16px;
+      margin: 18px 0;
+    }
+    .sg-card {
+      width: 72px; height: 100px; border-radius: 10px;
+      background: #fff; color: #1B2845;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-weight: 900;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+      animation: sg-card-in 0.35s ease;
+    }
+    @keyframes sg-card-in {
+      0% { transform: rotateY(90deg) scale(0.6); opacity: 0; }
+      100% { transform: rotateY(0) scale(1); opacity: 1; }
+    }
+    .sg-card.red { color: #d63333; }
+    .sg-card .rank { font-size: 28px; line-height: 1; }
+    .sg-card .suit { font-size: 22px; line-height: 1; margin-top: 4px; }
+    .sg-cards-mini { display: flex; gap: 4px; }
+    .sg-cards-mini .sg-card {
+      width: 30px; height: 42px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      animation: none;
+    }
+    .sg-cards-mini .sg-card .rank { font-size: 13px; }
+    .sg-cards-mini .sg-card .suit { font-size: 11px; margin-top: 2px; }
+    .sg-total {
+      text-align: center; font-size: 32px; font-weight: 900;
+      margin: 10px 0; color: var(--color-accent-2);
+    }
+
+    /* 21 結果行 */
+    .sg21-result-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; background: var(--color-bg-secondary);
+      border-radius: 10px; margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .sg21-result-row.loser {
+      border: 1px solid var(--color-danger);
+      background: rgba(231, 76, 60, 0.12);
+    }
+    .sg21-result-row.winner { border: 1px solid var(--color-accent-2); }
+    .sg21-result-row .name { font-weight: 700; flex: 1; min-width: 0; }
+    .sg21-result-row .sum {
+      font-weight: 900; font-size: 18px; min-width: 36px; text-align: center;
+    }
+    .sg21-result-row .rank-label {
+      color: var(--color-accent-2); font-size: 11px; font-weight: 700;
+    }
+    .sg21-result-row .loser-label {
+      color: var(--color-danger); font-size: 11px; font-weight: 800;
+    }
+
     /* ===== スキル発動ポップアップ ===== */
     .modal-backdrop {
       position: fixed; inset: 0;
@@ -670,6 +734,21 @@
   </section>
 
   <!-- ============================================ -->
+  <!-- サブゲーム: 21（ブラックジャック風）           -->
+  <!-- ============================================ -->
+  <section id="screen-subgame-21" class="screen" aria-label="21">
+    <h2 class="screen-heading">🃏 21（ブラックジャック風）</h2>
+    <p class="screen-note">合計21に一番近づけよう。21に一番遠い人＆バースト者が1杯。</p>
+
+    <div id="sg21-view"></div>
+    <div id="sg21-reveal" style="display:none;"></div>
+
+    <div class="actions" style="margin-top: 18px;">
+      <button id="btn-sg21-back" class="btn btn-ghost btn-block" type="button">＜ メニューに戻る</button>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
   <!-- 終了画面（スタッツ）                          -->
   <!-- ============================================ -->
   <section id="screen-result" class="screen" aria-label="終了画面">
@@ -716,6 +795,11 @@
   <div id="modal-menu" class="modal-backdrop" role="dialog" aria-modal="true">
     <div class="modal-box menu">
       <h3>メニュー</h3>
+      <div class="menu-section-title">🎲 サブゲーム</div>
+      <div class="actions">
+        <button id="btn-subgame-21" class="btn btn-secondary btn-block" type="button">🃏 21（ブラックジャック風）</button>
+      </div>
+      <div class="menu-section-title">⚙ ゲーム操作</div>
       <div class="actions">
         <button id="btn-menu-finish" class="btn btn-primary btn-block" type="button">終了してスタッツへ</button>
         <button id="btn-menu-reset"  class="btn btn-danger btn-block"  type="button">最初からやり直す</button>
@@ -1539,9 +1623,14 @@
 
   function renderActiveTimers() {
     const wrap = $('active-timers');
-    const gameScreens = ['screen-game', 'screen-countdown', 'screen-card', 'screen-handover'];
-    const onGameScreen = gameScreens.some((id) => $(id).classList.contains('is-active'));
-    if (state.activeTimers.length === 0 || !onGameScreen) {
+    // タイマーバーを隠す画面（プレイ前後の準備画面・結果画面）
+    const noTimerScreens = [
+      'screen-launch', 'screen-register',
+      'screen-char-manual', 'screen-char-random',
+      'screen-turn-order', 'screen-result'
+    ];
+    const onNoTimerScreen = noTimerScreens.some((id) => $(id).classList.contains('is-active'));
+    if (state.activeTimers.length === 0 || onNoTimerScreen) {
       wrap.style.display = 'none';
       wrap.innerHTML = '';
       return;
@@ -1705,6 +1794,183 @@
   }
 
   // ===================================================
+  // サブゲーム共通ヘルパー
+  // ===================================================
+  function buildStandardDeck() {
+    const suits = ['♠', '♥', '♦', '♣'];
+    const deck = [];
+    for (let r = 1; r <= 13; r++) {
+      suits.forEach((s) => deck.push({ rank: r, suit: s }));
+    }
+    return shuffle(deck);
+  }
+
+  function rankStr(r) {
+    if (r === 1) return 'A';
+    if (r === 11) return 'J';
+    if (r === 12) return 'Q';
+    if (r === 13) return 'K';
+    return String(r);
+  }
+
+  function renderSgCard(card) {
+    const isRed = card.suit === '♥' || card.suit === '♦';
+    return `<div class="sg-card${isRed ? ' red' : ''}">
+      <div class="rank">${rankStr(card.rank)}</div>
+      <div class="suit">${card.suit}</div>
+    </div>`;
+  }
+
+  // ===================================================
+  // サブゲーム: 21（ブラックジャック風）
+  // ===================================================
+  const subgame21 = {
+    deck: [],
+    hands: {},      // playerId -> [card, card]
+    swapped: {},    // playerId -> bool
+    currentIdx: 0,
+    phase: 'view'   // 'view' | 'reveal'
+  };
+
+  function startSubgame21() {
+    $('modal-menu').classList.remove('is-open');
+    subgame21.deck = buildStandardDeck();
+    subgame21.hands = {};
+    subgame21.swapped = {};
+    state.players.forEach((p) => {
+      subgame21.hands[p.id] = [subgame21.deck.pop(), subgame21.deck.pop()];
+      subgame21.swapped[p.id] = false;
+    });
+    subgame21.currentIdx = 0;
+    subgame21.phase = 'view';
+    showScreen('screen-subgame-21');
+    renderSg21();
+  }
+
+  function renderSg21() {
+    if (subgame21.phase === 'view') renderSg21View();
+    else renderSg21Reveal();
+  }
+
+  function renderSg21View() {
+    $('sg21-view').style.display = 'block';
+    $('sg21-reveal').style.display = 'none';
+    const p = state.players[subgame21.currentIdx];
+    $('sg21-view').innerHTML = `
+      <div class="sg-player">
+        ${charImg(p.characterId, 'char-img-lg')}
+        <div class="name">${escapeHtml(p.name)} の番</div>
+      </div>
+      <p class="screen-note" style="text-align:center;">他の人は画面を見ないでね</p>
+      <div id="sg21-hand-area">
+        <button id="btn-sg21-reveal" class="btn btn-primary btn-block" type="button">手札を見る</button>
+      </div>
+    `;
+    $('btn-sg21-reveal').addEventListener('click', () => showSg21Hand(p));
+  }
+
+  function showSg21Hand(p) {
+    const hand = subgame21.hands[p.id];
+    const swapped = subgame21.swapped[p.id];
+    const sum = hand[0].rank + hand[1].rank;
+    $('sg21-hand-area').innerHTML = `
+      <div class="sg-cards">${renderSgCard(hand[0])}${renderSgCard(hand[1])}</div>
+      <div class="sg-total">合計 ${sum}</div>
+      <div class="actions">
+        ${!swapped ? '<button id="btn-sg21-swap" class="btn btn-secondary btn-block" type="button">2枚とも交換</button>' : ''}
+        <button id="btn-sg21-keep" class="btn btn-primary btn-block" type="button">${swapped ? '確定する' : 'このまま確定'}</button>
+      </div>
+    `;
+    if (!swapped) {
+      $('btn-sg21-swap').addEventListener('click', () => {
+        subgame21.hands[p.id] = [subgame21.deck.pop(), subgame21.deck.pop()];
+        subgame21.swapped[p.id] = true;
+        showSg21Hand(p);
+      });
+    }
+    $('btn-sg21-keep').addEventListener('click', () => {
+      subgame21.currentIdx++;
+      if (subgame21.currentIdx >= state.players.length) {
+        subgame21.phase = 'reveal';
+      }
+      renderSg21();
+    });
+  }
+
+  function renderSg21Reveal() {
+    $('sg21-view').style.display = 'none';
+    $('sg21-reveal').style.display = 'block';
+    const results = state.players.map((p) => {
+      const hand = subgame21.hands[p.id];
+      const sum = hand[0].rank + hand[1].rank;
+      return { player: p, hand, sum, bust: sum > 21, distance: 21 - sum };
+    });
+    // 敗者: バースト全員 + 非バーストで21に一番遠い
+    const nonBust = results.filter((r) => !r.bust);
+    let losers = results.filter((r) => r.bust);
+    if (nonBust.length > 0) {
+      const maxDist = Math.max(...nonBust.map((r) => r.distance));
+      losers = losers.concat(nonBust.filter((r) => r.distance === maxDist));
+    }
+    // 表示順: 21に近い順、バーストは末尾
+    const sorted = results.slice().sort((a, b) => {
+      if (a.bust !== b.bust) return a.bust ? 1 : -1;
+      if (a.bust) return b.sum - a.sum;
+      return a.distance - b.distance;
+    });
+    const winner = sorted.find((r) => !r.bust && !losers.includes(r));
+    let html = '<h3 style="margin: 0 0 10px;">結果発表！</h3>';
+    sorted.forEach((res) => {
+      const isLoser = losers.includes(res);
+      const isWinner = res === winner;
+      let label = '';
+      if (res.bust) label = 'BUST';
+      else if (isWinner) label = '👑 勝者';
+      html += `
+        <div class="sg21-result-row ${isLoser ? 'loser' : ''} ${isWinner ? 'winner' : ''}">
+          ${charImg(res.player.characterId, 'char-img-md')}
+          <span class="name">${escapeHtml(res.player.name)}</span>
+          <div class="sg-cards-mini">${renderSgCard(res.hand[0])}${renderSgCard(res.hand[1])}</div>
+          <span class="sum">${res.sum}</span>
+          ${label ? `<span class="rank-label">${label}</span>` : ''}
+          ${isLoser ? '<span class="loser-label">1杯！</span>' : ''}
+        </div>
+      `;
+    });
+    html += `
+      <div class="actions" style="margin-top: 14px;">
+        <button id="btn-sg21-apply" class="btn btn-primary btn-block" type="button">罰ゲーム適用してメインに戻る</button>
+        <button id="btn-sg21-replay" class="btn btn-secondary btn-block" type="button">もう一度</button>
+      </div>
+    `;
+    $('sg21-reveal').innerHTML = html;
+    $('btn-sg21-apply').addEventListener('click', () => {
+      losers.forEach((res) => {
+        res.player.drinkCount += 1;
+        state.history.push({
+          turn: state.currentTurn,
+          timestamp: Date.now(),
+          cardId: null,
+          drawnBy: null,
+          targets: [res.player.id],
+          drinkers: [res.player.id],
+          subgame: '21',
+          bust: res.bust
+        });
+      });
+      saveAll();
+      showScreen('screen-game');
+      renderCurrentTurn();
+    });
+    $('btn-sg21-replay').addEventListener('click', startSubgame21);
+  }
+
+  function initSubgame21() {
+    $('btn-subgame-21').addEventListener('click', startSubgame21);
+    $('btn-sg21-back').addEventListener('click', () => showScreen('screen-game'));
+  }
+
+  // ===================================================
   // 渡す演出
   // ===================================================
   function showHandover() {
@@ -1824,6 +2090,7 @@
     initMenu();
     initViolateModal();
     initPassModal();
+    initSubgame21();
     $('btn-draw').addEventListener('click', () => { ensureAudioContext(); startDraw(); });
     $('btn-card-execute').addEventListener('click', executeCard);
     // 最初のユーザー操作で AudioContext を起こす（iOS Safari 対策）
