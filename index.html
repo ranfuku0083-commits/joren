@@ -795,6 +795,20 @@
   </section>
 
   <!-- ============================================ -->
+  <!-- サブゲーム: ハイ&ロー                          -->
+  <!-- ============================================ -->
+  <section id="screen-subgame-hilo" class="screen" aria-label="ハイ&ロー">
+    <h2 class="screen-heading">⬆⬇ ハイ&ロー</h2>
+    <p class="screen-note">次のカードが上か下か。3連続正解でボーナス。</p>
+
+    <div id="hilo-content"></div>
+
+    <div class="actions" style="margin-top: 18px;">
+      <button id="btn-subgame-hilo-back" class="btn btn-ghost btn-block" type="button">＜ メニューに戻る</button>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
   <!-- 終了画面（スタッツ）                          -->
   <!-- ============================================ -->
   <section id="screen-result" class="screen" aria-label="終了画面">
@@ -845,6 +859,7 @@
       <div class="actions">
         <button id="btn-subgame-21" class="btn btn-secondary btn-block" type="button">🃏 21（ブラックジャック風）</button>
         <button id="btn-subgame-roulette" class="btn btn-secondary btn-block" type="button">🎰 キャラクタールーレット</button>
+        <button id="btn-subgame-hilo" class="btn btn-secondary btn-block" type="button">⬆⬇ ハイ&ロー</button>
       </div>
       <div class="menu-section-title">⚙ ゲーム操作</div>
       <div class="actions">
@@ -2140,6 +2155,193 @@
   }
 
   // ===================================================
+  // サブゲーム: ハイ&ロー
+  // ===================================================
+  const subgameHilo = {
+    player: null,
+    baseCard: null,
+    nextCard: null,
+    streak: 0
+  };
+
+  function drawHiloCard() {
+    const suits = ['♠', '♥', '♦', '♣'];
+    return {
+      rank: Math.floor(Math.random() * 13) + 1,
+      suit: suits[Math.floor(Math.random() * 4)]
+    };
+  }
+
+  function startSubgameHilo() {
+    $('modal-menu').classList.remove('is-open');
+    subgameHilo.player = null;
+    subgameHilo.baseCard = null;
+    subgameHilo.nextCard = null;
+    subgameHilo.streak = 0;
+    showScreen('screen-subgame-hilo');
+    renderHiloSelect();
+  }
+
+  function renderHiloSelect() {
+    const c = $('hilo-content');
+    c.innerHTML = `
+      <p class="screen-note" style="text-align:center; margin-top: 12px;">誰がやる？</p>
+      <div id="hilo-player-grid" class="violate-grid"></div>
+    `;
+    const grid = $('hilo-player-grid');
+    state.players.forEach((p) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'violate-player';
+      btn.innerHTML = `${charImg(p.characterId, 'char-img-md')}<span class="name">${escapeHtml(p.name)}</span>`;
+      btn.addEventListener('click', () => {
+        subgameHilo.player = p;
+        subgameHilo.baseCard = drawHiloCard();
+        subgameHilo.streak = 0;
+        renderHiloGuess();
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  function renderHiloGuess() {
+    const p = subgameHilo.player;
+    $('hilo-content').innerHTML = `
+      <div class="sg-player" style="margin:14px 0;">
+        ${charImg(p.characterId, 'char-img-md')}
+        <div class="name" style="font-size:16px;">${escapeHtml(p.name)} の番</div>
+      </div>
+      <div style="text-align:center; opacity:0.7; font-size:13px;">連続正解: ${subgameHilo.streak}</div>
+      <div class="sg-cards">${renderSgCard(subgameHilo.baseCard)}</div>
+      <div style="text-align:center; opacity:0.85; margin: 14px 0; font-weight:700;">次のカードは上？下？</div>
+      <div class="actions row">
+        <button id="btn-hilo-hi" class="btn btn-primary" type="button">⬆ HI（上）</button>
+        <button id="btn-hilo-lo" class="btn btn-primary" type="button">⬇ LO（下）</button>
+      </div>
+    `;
+    $('btn-hilo-hi').addEventListener('click', () => guessHilo('hi'));
+    $('btn-hilo-lo').addEventListener('click', () => guessHilo('lo'));
+  }
+
+  function guessHilo(g) {
+    subgameHilo.nextCard = drawHiloCard();
+    const diff = subgameHilo.nextCard.rank - subgameHilo.baseCard.rank;
+    // 同値は不正解扱い
+    const correct = (g === 'hi' && diff > 0) || (g === 'lo' && diff < 0);
+    renderHiloReveal(correct);
+  }
+
+  function renderHiloReveal(correct) {
+    $('hilo-content').innerHTML = `
+      <div style="text-align:center; opacity:0.6; font-size:12px;">連続正解: ${subgameHilo.streak}</div>
+      <div class="sg-cards" style="gap:8px;">
+        ${renderSgCard(subgameHilo.baseCard)}
+        <div style="font-size:26px; align-self:center; opacity:0.6;">→</div>
+        ${renderSgCard(subgameHilo.nextCard)}
+      </div>
+      <div style="text-align:center; font-size:26px; font-weight:900; margin: 16px 0; color: ${correct ? 'var(--color-accent-2)' : 'var(--color-danger)'};">
+        ${correct ? '⭕ 正解！' : '❌ 不正解'}
+      </div>
+      <div id="hilo-next"></div>
+    `;
+    if (correct) {
+      subgameHilo.streak++;
+      subgameHilo.baseCard = subgameHilo.nextCard;
+      $('hilo-next').innerHTML = `
+        <div class="actions">
+          <button id="btn-hilo-continue" class="btn btn-primary btn-block" type="button">続けて引く</button>
+          <button id="btn-hilo-stop" class="btn btn-secondary btn-block" type="button">ここで止める</button>
+        </div>
+      `;
+      $('btn-hilo-continue').addEventListener('click', renderHiloGuess);
+      $('btn-hilo-stop').addEventListener('click', finishHilo);
+    } else {
+      finishHilo();
+    }
+  }
+
+  function finishHilo() {
+    const p = subgameHilo.player;
+    let outcomeHtml = '';
+    if (subgameHilo.streak === 0) {
+      outcomeHtml = `<div style="text-align:center; margin: 14px 0; color: var(--color-danger); font-weight:800; font-size:16px;">😢 ${escapeHtml(p.name)} さん、1杯！</div>`;
+    } else if (subgameHilo.streak < 3) {
+      outcomeHtml = `<div style="text-align:center; margin: 14px 0; opacity:0.85;">セーフ。誰も飲まずに済んだ。</div>`;
+    } else {
+      outcomeHtml = `<div style="text-align:center; margin: 14px 0; color: var(--color-accent-2); font-weight:800; font-size:16px;">🎉 ボーナス！誰かに1杯飲ませよう</div>`;
+    }
+    $('hilo-content').innerHTML = `
+      <div style="text-align:center; margin-top: 12px;">
+        <div style="font-size:14px; opacity:0.7;">${escapeHtml(p.name)} の連続正解</div>
+        <div style="font-size:64px; font-weight:900; color: var(--color-accent-2); line-height:1;">${subgameHilo.streak}</div>
+      </div>
+      ${outcomeHtml}
+      <div id="hilo-end-actions"></div>
+    `;
+    const wrap = $('hilo-end-actions');
+    if (subgameHilo.streak >= 3) {
+      // ボーナス：本人以外を選ぶ
+      const grid = document.createElement('div');
+      grid.className = 'violate-grid';
+      state.players.filter((q) => q.id !== p.id).forEach((q) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'violate-player';
+        btn.innerHTML = `${charImg(q.characterId, 'char-img-md')}<span class="name">${escapeHtml(q.name)}</span>`;
+        btn.addEventListener('click', () => applyHiloBonus(q));
+        grid.appendChild(btn);
+      });
+      wrap.appendChild(grid);
+      const replay = document.createElement('div');
+      replay.className = 'actions';
+      replay.style.marginTop = '10px';
+      replay.innerHTML = `<button id="btn-hilo-replay" class="btn btn-ghost btn-block" type="button">放棄してもう一度</button>`;
+      wrap.appendChild(replay);
+      $('btn-hilo-replay').addEventListener('click', startSubgameHilo);
+    } else {
+      wrap.innerHTML = `
+        <div class="actions" style="margin-top: 14px;">
+          <button id="btn-hilo-apply" class="btn btn-primary btn-block" type="button">${subgameHilo.streak === 0 ? '罰ゲーム適用してメインに戻る' : 'メインに戻る'}</button>
+          <button id="btn-hilo-replay" class="btn btn-secondary btn-block" type="button">もう一度</button>
+        </div>
+      `;
+      $('btn-hilo-apply').addEventListener('click', () => {
+        if (subgameHilo.streak === 0) {
+          p.drinkCount += 1;
+          state.history.push({
+            turn: state.currentTurn, timestamp: Date.now(),
+            cardId: null, drawnBy: null,
+            targets: [p.id], drinkers: [p.id],
+            subgame: 'hilo', streak: 0
+          });
+          saveAll();
+        }
+        showScreen('screen-game');
+        renderCurrentTurn();
+      });
+      $('btn-hilo-replay').addEventListener('click', startSubgameHilo);
+    }
+  }
+
+  function applyHiloBonus(victim) {
+    victim.drinkCount += 1;
+    state.history.push({
+      turn: state.currentTurn, timestamp: Date.now(),
+      cardId: null, drawnBy: null,
+      targets: [victim.id], drinkers: [victim.id],
+      subgame: 'hilo', streak: subgameHilo.streak, bonus: true
+    });
+    saveAll();
+    showScreen('screen-game');
+    renderCurrentTurn();
+  }
+
+  function initSubgameHilo() {
+    $('btn-subgame-hilo').addEventListener('click', startSubgameHilo);
+    $('btn-subgame-hilo-back').addEventListener('click', () => showScreen('screen-game'));
+  }
+
+  // ===================================================
   // 渡す演出
   // ===================================================
   function showHandover() {
@@ -2261,6 +2463,7 @@
     initPassModal();
     initSubgame21();
     initSubgameRoulette();
+    initSubgameHilo();
     $('btn-draw').addEventListener('click', () => { ensureAudioContext(); startDraw(); });
     $('btn-card-execute').addEventListener('click', executeCard);
     // 最初のユーザー操作で AudioContext を起こす（iOS Safari 対策）
