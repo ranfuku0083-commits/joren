@@ -545,6 +545,7 @@
       border: 2px solid var(--color-accent-2);
       padding: 24px; text-align: center;
       animation: skillIn 0.3s ease;
+      position: relative;
     }
     @keyframes skillIn {
       0% { transform: scale(0.3); opacity: 0; }
@@ -558,6 +559,99 @@
     .modal-box .catchphrase { font-style: italic; opacity: 0.85; margin: 10px 0; }
     .modal-box .skill-desc  { font-size: 13px; opacity: 0.8; margin: 8px 0 16px; }
     .modal-box .remaining   { font-size: 11px; opacity: 0.6; margin-bottom: 14px; }
+
+    /* スキル発動モーダル専用の派手な演出 */
+    #modal-skill .modal-box {
+      animation:
+        skillBoxIn 0.5s cubic-bezier(0.34, 1.7, 0.55, 1),
+        skillBoxGlow 1.8s ease-in-out infinite alternate 0.5s;
+      box-shadow:
+        0 0 60px rgba(232, 165, 71, 0.55),
+        0 0 120px rgba(232, 165, 71, 0.22),
+        inset 0 0 24px rgba(232, 165, 71, 0.12);
+    }
+    @keyframes skillBoxIn {
+      0%   { transform: scale(0.2) rotate(-12deg); opacity: 0; }
+      55%  { transform: scale(1.12) rotate(3deg);  opacity: 1; }
+      75%  { transform: scale(0.98) rotate(-1deg); }
+      100% { transform: scale(1) rotate(0);        opacity: 1; }
+    }
+    @keyframes skillBoxGlow {
+      0%   { box-shadow: 0 0 40px rgba(232, 165, 71, 0.45), 0 0  80px rgba(232, 165, 71, 0.18), inset 0 0 18px rgba(232, 165, 71, 0.08); }
+      100% { box-shadow: 0 0 90px rgba(232, 165, 71, 0.85), 0 0 180px rgba(232, 165, 71, 0.40), inset 0 0 30px rgba(232, 165, 71, 0.20); }
+    }
+
+    #modal-skill .modal-box .icon {
+      display: inline-block;
+      animation: skillIconSpin 1.6s ease-in-out infinite;
+    }
+    @keyframes skillIconSpin {
+      0%   { transform: scale(1) rotate(0); }
+      40%  { transform: scale(1.35) rotate(20deg); text-shadow: 0 0 28px rgba(232, 165, 71, 1); }
+      70%  { transform: scale(1.15) rotate(-12deg); }
+      100% { transform: scale(1) rotate(0); }
+    }
+
+    #modal-skill .modal-box .char-emoji {
+      display: inline-block;
+      animation:
+        skillCharBurst 0.7s cubic-bezier(0.34, 1.7, 0.55, 1),
+        skillCharBob 1.4s ease-in-out infinite alternate 0.7s;
+      filter: drop-shadow(0 0 24px rgba(232, 165, 71, 0.65));
+    }
+    #modal-skill .modal-box .char-emoji .char-img {
+      box-shadow: 0 0 28px rgba(232, 165, 71, 0.7);
+    }
+    @keyframes skillCharBurst {
+      0%   { transform: scale(0.1) rotate(-360deg); opacity: 0; }
+      60%  { transform: scale(1.25) rotate(20deg);  opacity: 1; }
+      100% { transform: scale(1) rotate(0);          opacity: 1; }
+    }
+    @keyframes skillCharBob {
+      0%   { transform: translateY(0) scale(1); }
+      100% { transform: translateY(-6px) scale(1.05); }
+    }
+
+    #modal-skill .modal-box .skill-name {
+      animation: skillNameFlash 0.55s ease 0.35s backwards;
+    }
+    @keyframes skillNameFlash {
+      0%   { opacity: 0; transform: translateY(10px) scale(0.85); text-shadow: 0 0 0 var(--color-accent-2); }
+      55%  { transform: translateY(-3px) scale(1.08); text-shadow: 0 0 22px rgba(232, 165, 71, 0.9); }
+      100% { transform: translateY(0) scale(1); text-shadow: none; opacity: 1; }
+    }
+    #modal-skill .modal-box .catchphrase {
+      animation: skillCatch 0.5s ease 0.5s backwards;
+    }
+    @keyframes skillCatch {
+      0%   { opacity: 0; transform: translateX(-12px); }
+      100% { opacity: 0.85; transform: translateX(0); }
+    }
+
+    /* コーナーの ⚡ スパーク */
+    #modal-skill .modal-box::before,
+    #modal-skill .modal-box::after {
+      content: '⚡';
+      position: absolute;
+      font-size: 32px;
+      color: var(--color-accent-2);
+      text-shadow: 0 0 12px rgba(232, 165, 71, 0.95);
+      pointer-events: none;
+    }
+    #modal-skill .modal-box::before {
+      top: -22px; left: -16px;
+      animation: skillSparkA 1.5s linear infinite;
+    }
+    #modal-skill .modal-box::after {
+      bottom: -22px; right: -16px;
+      animation: skillSparkA 1.5s linear infinite 0.75s;
+    }
+    @keyframes skillSparkA {
+      0%   { transform: scale(0.6) rotate(0); opacity: 0; }
+      25%  { transform: scale(1.4) rotate(40deg); opacity: 1; }
+      75%  { transform: scale(1.0) rotate(220deg); opacity: 0.7; }
+      100% { transform: scale(0.5) rotate(360deg); opacity: 0; }
+    }
 
     /* ===== 渡す演出 ===== */
     #screen-handover { justify-content: center; gap: 18px; }
