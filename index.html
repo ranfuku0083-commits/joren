@@ -296,6 +296,10 @@
       background: rgba(232, 165, 71, 0.2); color: var(--color-accent-2);
       font-weight: 700; margin: 3px 4px 0 0; font-size: 12px;
     }
+    .card-targets .fallback-note {
+      display: block; margin-top: 8px; font-size: 12px;
+      color: var(--color-accent-2); opacity: 0.85;
+    }
 
     /* ===== スキル発動ポップアップ ===== */
     .modal-backdrop {
@@ -694,6 +698,7 @@
     currentTurn: 1,
     pendingCard: null,    // 今引いたカード
     pendingTargets: [],   // 今引いたカードの対象者ID配列
+    pendingFallback: false, // 該当者不足で引いた人にフォールバックしたか
     pendingSkillTriggers: [], // スキル発動候補
     pendingSkillIndex: 0
   };
@@ -1140,6 +1145,8 @@
   // 対象者判定（SPEC §6.2）
   // ===================================================
   function determineTargets(card, players, drawnBy) {
+    // フォールバックフラグは毎抽選でリセット
+    state.pendingFallback = false;
     switch (card.targetType) {
       case 'all':
         return players.map((p) => p.id);
@@ -1148,7 +1155,10 @@
           const ch = getCharacterById(p.characterId);
           return card.targetTags.some((tag) => ch.tags.includes(tag));
         });
-        if (matched.length === 0) return [drawnBy];
+        if (matched.length === 0) {
+          state.pendingFallback = true;
+          return [drawnBy];
+        }
         return matched.map((p) => p.id);
       }
       case 'random': {
@@ -1156,7 +1166,12 @@
         let count = 1;
         if (/3人/.test(card.text)) count = 3;
         else if (/2人|ペア/.test(card.text)) count = 2;
-        const picked = shuffle(players).slice(0, Math.min(count, players.length));
+        // 参加者数が必要人数に満たない場合は引いた人が代わりに飲む（SPEC §6.2）
+        if (players.length < count) {
+          state.pendingFallback = true;
+          return [drawnBy];
+        }
+        const picked = shuffle(players).slice(0, count);
         return picked.map((p) => p.id);
       }
       case 'situation':
@@ -1194,6 +1209,12 @@
         chip.innerHTML = `${charImg(p.characterId, 'char-img-xs')} ${escapeHtml(p.name)}`;
         list.appendChild(chip);
       });
+      if (state.pendingFallback) {
+        const note = document.createElement('span');
+        note.className = 'fallback-note';
+        note.textContent = '※該当者不足のため、引いた人が代わりに飲みます';
+        list.appendChild(note);
+      }
     }
   }
 
