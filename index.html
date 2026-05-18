@@ -287,16 +287,52 @@
 
     /* ===== お題カード ===== */
     #screen-card { gap: 16px; }
+    .card-flip-stage {
+      position: relative; width: 100%;
+      perspective: 1200px;
+    }
     .card-paper {
       width: 100%; padding: 22px; border-radius: 22px;
       background: linear-gradient(160deg, #2D3A5C, #1B2845);
       border: 1px solid rgba(232, 165, 71, 0.3);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-      animation: cardIn 0.4s ease;
+      transform-origin: center;
+      animation: cardIn 0.6s cubic-bezier(0.34, 1.4, 0.55, 1) backwards;
+      animation-delay: 0.18s;
     }
     @keyframes cardIn {
-      0%   { transform: rotateY(90deg) scale(0.7); opacity: 0; }
-      100% { transform: rotateY(0deg) scale(1); opacity: 1; }
+      0%   { transform: rotateY(180deg) scale(0.5); opacity: 0; }
+      50%  { transform: rotateY(60deg)  scale(0.85); opacity: 0.6; }
+      80%  { transform: rotateY(-12deg) scale(1.06); opacity: 1; }
+      100% { transform: rotateY(0)      scale(1);    opacity: 1; }
+    }
+
+    .card-back-overlay {
+      position: absolute; inset: 0; z-index: 5;
+      background:
+        radial-gradient(circle at 30% 30%, rgba(232, 165, 71, 0.18) 0%, transparent 60%),
+        linear-gradient(135deg, #2D3A5C 0%, #1B2845 60%, #131c30 100%);
+      border: 2px solid var(--color-accent-2);
+      border-radius: 22px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+      animation: cardBackFlipAway 0.6s cubic-bezier(0.5, 0, 0.5, 1) forwards;
+    }
+    .card-back-inner {
+      text-align: center; transform-style: preserve-3d;
+    }
+    .card-back-moon { font-size: 56px; line-height: 1; }
+    .card-back-text {
+      font-size: 28px; font-weight: 900;
+      letter-spacing: 0.3em; margin-top: 10px;
+      color: var(--color-accent-2);
+      text-shadow: 0 0 18px rgba(232, 165, 71, 0.45);
+    }
+    @keyframes cardBackFlipAway {
+      0%   { transform: rotateY(0) scale(1);          opacity: 1; }
+      40%  { transform: rotateY(-90deg) scale(0.95);  opacity: 0.85; }
+      60%  { transform: rotateY(-90deg) scale(0.85);  opacity: 0; }
+      100% { transform: rotateY(-180deg) scale(0.7);  opacity: 0; pointer-events: none; }
     }
     .card-hashtag {
       color: var(--color-accent-1); font-weight: 800; font-size: 22px;
@@ -756,13 +792,21 @@
   <!-- お題カード                                    -->
   <!-- ============================================ -->
   <section id="screen-card" class="screen" aria-label="お題カード">
-    <div class="card-paper">
-      <div id="card-hashtag" class="card-hashtag">#乾杯</div>
-      <div id="card-category" class="card-category">乾杯</div>
-      <div id="card-text" class="card-text"></div>
-      <div class="card-targets">
-        <span class="lbl">対象:</span>
-        <span id="card-targets-list"></span>
+    <div class="card-flip-stage">
+      <div id="card-back-overlay" class="card-back-overlay">
+        <div class="card-back-inner">
+          <div class="card-back-moon">🌙</div>
+          <div class="card-back-text">常 連</div>
+        </div>
+      </div>
+      <div class="card-paper">
+        <div id="card-hashtag" class="card-hashtag">#乾杯</div>
+        <div id="card-category" class="card-category">乾杯</div>
+        <div id="card-text" class="card-text"></div>
+        <div class="card-targets">
+          <span class="lbl">対象:</span>
+          <span id="card-targets-list"></span>
+        </div>
       </div>
     </div>
 
@@ -1118,6 +1162,17 @@
     // ゲーム系画面では topbar 表示
     const gameScreens = ['screen-game', 'screen-countdown', 'screen-card', 'screen-handover'];
     $('game-topbar').style.display = gameScreens.includes(id) ? 'flex' : 'none';
+    // カード画面のフリップアニメを毎回再生
+    if (id === 'screen-card') {
+      const overlay = $('card-back-overlay');
+      const paper = $('screen-card').querySelector('.card-paper');
+      [overlay, paper].forEach((el) => {
+        if (!el) return;
+        el.style.animation = 'none';
+        void el.offsetWidth;
+        el.style.animation = '';
+      });
+    }
     renderActiveTimers();
     window.scrollTo(0, 0);
   }
