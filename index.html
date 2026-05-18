@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>常連 - BARの常連たちと、今夜も飲もう</title>
+  <link rel="icon" type="image/png" href="assets/icons/icon-1024.png" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-1024.png" />
+  <meta name="theme-color" content="#1B2845" />
   <!--
     PWA関連（manifest.json, service-worker.js）はPhase 1後半で再有効化予定。
     現状は単一HTMLとして動作確認できるよう <link rel="manifest"> と SW登録を外している。
@@ -372,6 +375,24 @@
     .modal-box h3 { margin: 0 0 12px; font-size: 18px; }
     .modal-box .desc { font-size: 13px; opacity: 0.7; margin-bottom: 16px; }
 
+    /* ===== キャラ画像 ===== */
+    .char-img {
+      display: inline-block;
+      object-fit: cover;
+      border-radius: 50%;
+      vertical-align: middle;
+      background: var(--color-bg-secondary);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+    .char-img-xs { width: 22px; height: 22px; box-shadow: none; }
+    .char-img-sm { width: 32px; height: 32px; }
+    .char-img-md { width: 44px; height: 44px; }
+    .char-img-lg { width: 88px; height: 88px; }
+    .char-img-xl { width: 128px; height: 128px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45); }
+    .char-card .char-img { width: 52px; height: 52px; box-shadow: none; }
+    .current-turn-card .char-img { width: 128px; height: 128px; }
+    .modal-box .char-img { width: 96px; height: 96px; margin: 8px 0; }
+
     /* ===== フッター ===== */
     .app-footer {
       text-align: center; padding: 12px 16px;
@@ -717,6 +738,13 @@
     return c ? c.name : '';
   }
 
+  function charImg(charId, sizeClass) {
+    if (!charId) return '';
+    const alt = CHARACTER_EMOJI[charId] || '';
+    const cls = sizeClass || 'char-img-md';
+    return `<img src="assets/characters/${charId}.png" alt="${alt}" class="char-img ${cls}" loading="lazy" />`;
+  }
+
   // ===================================================
   // LocalStorage 永続化
   // ===================================================
@@ -922,7 +950,7 @@
       btn.className = 'char-card' + (isTaken ? ' is-taken' : '');
       btn.disabled = isTaken || allDone;
       btn.innerHTML = `
-        <span class="emoji">${CHARACTER_EMOJI[c.id]}</span>
+        ${charImg(c.id)}
         <span class="name">${c.name}</span>
       `;
       btn.addEventListener('click', () => {
@@ -942,7 +970,7 @@
       const ch = p.characterId ? getCharacterById(p.characterId) : null;
       const li = document.createElement('li');
       if (idx === manualSelect.currentIndex && !allDone) li.className = 'current';
-      li.textContent = `${idx + 1}. ${p.name} → ${ch ? CHARACTER_EMOJI[ch.id] + ' ' + ch.name : '？'}`;
+      li.innerHTML = `${idx + 1}. ${escapeHtml(p.name)} → ${ch ? charImg(ch.id, 'char-img-xs') + ' ' + escapeHtml(ch.name) : '？'}`;
       ul.appendChild(li);
     });
 
@@ -981,7 +1009,7 @@
       row.innerHTML = `
         <span class="name">${escapeHtml(p.name)}</span>
         <span class="arrow">→</span>
-        <span class="emoji">${CHARACTER_EMOJI[ch.id]}</span>
+        ${charImg(ch.id, 'char-img-md')}
         <span class="char-name">${ch.name}</span>
       `;
       area.appendChild(row);
@@ -1022,7 +1050,7 @@
       row.className = 'turn-row';
       row.innerHTML = `
         <span class="num">${idx + 1}</span>
-        <span class="emoji">${CHARACTER_EMOJI[ch.id]}</span>
+        ${charImg(ch.id, 'char-img-md')}
         <span class="player-name">${escapeHtml(p.name)}</span>
         <span class="char-name">${ch.name}</span>
       `;
@@ -1049,7 +1077,7 @@
   function renderCurrentTurn() {
     const p = currentPlayer();
     const ch = getCharacterById(p.characterId);
-    $('current-emoji').textContent = CHARACTER_EMOJI[ch.id];
+    $('current-emoji').innerHTML = charImg(ch.id, 'char-img-xl');
     $('current-name').textContent  = p.name;
     $('current-char').textContent  = ch.name + ' - ' + ch.catchphrase;
     $('current-round-info').textContent = 'Round ' + state.currentTurn;
@@ -1163,7 +1191,7 @@
         if (!p) return;
         const chip = document.createElement('span');
         chip.className = 'target-chip';
-        chip.textContent = `${CHARACTER_EMOJI[p.characterId]} ${p.name}`;
+        chip.innerHTML = `${charImg(p.characterId, 'char-img-xs')} ${escapeHtml(p.name)}`;
         list.appendChild(chip);
       });
     }
@@ -1194,7 +1222,7 @@
 
   function showSkillModal(trig) {
     const p = state.players.find((x) => x.id === trig.playerId);
-    $('skill-emoji').textContent = CHARACTER_EMOJI[trig.character.id];
+    $('skill-emoji').innerHTML = charImg(trig.character.id, 'char-img-lg');
     $('skill-name').textContent  = trig.character.skill.name + '（' + p.name + '）';
     $('skill-catchphrase').textContent = '"' + trig.character.catchphrase + '"';
     $('skill-desc').textContent  = trig.character.skill.description;
@@ -1266,7 +1294,7 @@
     const next = currentPlayer();
     const ch = getCharacterById(next.characterId);
     $('handover-name').textContent = '→ ' + next.name + ' さんへ';
-    $('handover-char').textContent = CHARACTER_EMOJI[ch.id] + ' ' + ch.name;
+    $('handover-char').innerHTML = charImg(ch.id, 'char-img-md') + ' ' + escapeHtml(ch.name);
     showScreen('screen-handover');
   }
 
@@ -1291,7 +1319,7 @@
       row.className = 'row rank-' + (idx + 1);
       row.innerHTML = `
         <span class="rank">${idx + 1}位</span>
-        <span class="emoji">${CHARACTER_EMOJI[ch.id]}</span>
+        ${charImg(ch.id, 'char-img-md')}
         <span class="name">${escapeHtml(p.name)}<br><small style="opacity:0.6;font-size:11px;">${ch.name}</small></span>
         <span class="count">${p.drinkCount} 回</span>
       `;
