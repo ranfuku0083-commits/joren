@@ -1035,6 +1035,10 @@
         <button id="btn-subgame-hilo" class="btn btn-secondary btn-block" type="button">⬆⬇ ハイ&ロー</button>
         <button id="btn-subgame-td" class="btn btn-secondary btn-block" type="button">🎭 真実か挑戦か</button>
       </div>
+      <div class="menu-section-title">🎛 設定</div>
+      <div class="actions">
+        <button id="btn-sound-toggle" class="btn btn-secondary btn-block" type="button">🔊 効果音 ON</button>
+      </div>
       <div class="menu-section-title">⚙ ゲーム操作</div>
       <div class="actions">
         <button id="btn-menu-finish" class="btn btn-primary btn-block" type="button">終了してスタッツへ</button>
@@ -1103,7 +1107,8 @@
     CARD_HISTORY: 'joren_card_history',
     CARD_DECK:  'joren_card_deck',
     GAME_START_TIME: 'joren_game_start_time',
-    ACTIVE_TIMERS: 'joren_active_timers'
+    ACTIVE_TIMERS: 'joren_active_timers',
+    SOUND_ON: 'joren_sound_on'
   };
 
   // ?fasttimer=1 で duration を 1/10 に短縮（デバッグ用）
@@ -1146,9 +1151,10 @@
     pendingViolateTimerId: null // 違反者選択モーダル展開中のタイマーID
   };
 
-  // Web Audio API（アラーム用）
+  // Web Audio API（アラーム用 + 効果音）
   let audioCtx = null;
   let timerTickHandle = null;
+  let soundOn = true;
 
   // 手動キャラ選択モード用
   const manualSelect = {
@@ -1622,6 +1628,7 @@
       state.pendingSkillIndex = 0;
       renderCard(card);
       showScreen('screen-card');
+      playSE('card_reveal');
       processNextSkillTrigger();
     });
   }
@@ -1633,6 +1640,7 @@
     const tick = () => {
       if (count <= 0) { done(); return; }
       elem.textContent = String(count);
+      playSE('tick');
       // アニメーション再適用
       elem.style.animation = 'none';
       void elem.offsetHeight;
@@ -1768,6 +1776,7 @@
       ? '使用無制限'
       : '残り ' + trig.remaining + ' 回';
     $('modal-skill').classList.add('is-open');
+    playSE('skill_proc');
   }
 
   function closeSkillModal() {
@@ -1865,6 +1874,100 @@
         osc.stop(baseTime + s.t + s.dur + 0.05);
       });
     } catch (_e) {}
+  }
+
+  // ===================================================
+  // 効果音
+  // ===================================================
+  function playTone(freq, durSec, opts) {
+    if (!audioCtx) return;
+    opts = opts || {};
+    try {
+      const ctx = audioCtx;
+      const t = ctx.currentTime + (opts.start || 0);
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = opts.type || 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+      if (opts.freqTo) {
+        osc.frequency.exponentialRampToValueAtTime(opts.freqTo, t + durSec);
+      }
+      const peak = opts.gain != null ? opts.gain : 0.16;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(peak, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + durSec);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + durSec + 0.05);
+    } catch (_e) {}
+  }
+
+  function playSE(name) {
+    if (!soundOn) return;
+    ensureAudioContext();
+    if (!audioCtx) return;
+    switch (name) {
+      case 'tick':
+        playTone(1100, 0.06, { type: 'square', gain: 0.10 });
+        break;
+      case 'card_reveal':
+        playTone(440, 0.10, { type: 'triangle', gain: 0.15, start: 0.00 });
+        playTone(660, 0.10, { type: 'triangle', gain: 0.15, start: 0.10 });
+        playTone(880, 0.22, { type: 'triangle', gain: 0.18, start: 0.20 });
+        break;
+      case 'skill_proc':
+        [880, 1100, 1320, 1760, 2200].forEach((f, i) => {
+          playTone(f, 0.18, { type: 'sine', gain: 0.13, start: i * 0.07 });
+        });
+        break;
+      case 'result_jingle':
+        [523, 659, 784, 1047, 1319].forEach((f, i) => {
+          playTone(f, 0.28, { type: 'triangle', gain: 0.17, start: i * 0.16 });
+        });
+        break;
+      case 'success':
+        playTone(660, 0.08, { type: 'triangle', gain: 0.15 });
+        playTone(990, 0.18, { type: 'triangle', gain: 0.15, start: 0.08 });
+        break;
+      case 'fail':
+        playTone(330, 0.12, { type: 'sawtooth', gain: 0.14 });
+        playTone(220, 0.30, { type: 'sawtooth', gain: 0.14, start: 0.10 });
+        break;
+      case 'roulette_stop':
+        playTone(880, 0.06, { type: 'square', gain: 0.14 });
+        playTone(1100, 0.08, { type: 'square', gain: 0.14, start: 0.06 });
+        playTone(1320, 0.20, { type: 'triangle', gain: 0.18, start: 0.14 });
+        break;
+    }
+  }
+
+  function loadSoundPref() {
+    try {
+      const v = localStorage.getItem(STORAGE_KEYS.SOUND_ON);
+      soundOn = v === null ? true : v === 'true';
+    } catch (_e) { soundOn = true; }
+  }
+
+  function setSoundOn(on) {
+    soundOn = !!on;
+    try { localStorage.setItem(STORAGE_KEYS.SOUND_ON, soundOn ? 'true' : 'false'); } catch (_e) {}
+    updateSoundToggleLabel();
+  }
+
+  function updateSoundToggleLabel() {
+    const btn = $('btn-sound-toggle');
+    if (!btn) return;
+    btn.textContent = soundOn ? '🔊 効果音 ON' : '🔇 効果音 OFF';
+  }
+
+  function initSoundToggle() {
+    loadSoundPref();
+    $('btn-sound-toggle').addEventListener('click', () => {
+      ensureAudioContext();
+      setSoundOn(!soundOn);
+      if (soundOn) playSE('success');
+    });
+    updateSoundToggleLabel();
   }
 
   function startMissionTimer(card) {
@@ -2194,6 +2297,7 @@
   function renderSg21Reveal() {
     $('sg21-view').style.display = 'none';
     $('sg21-reveal').style.display = 'block';
+    playSE('result_jingle');
     const results = state.players.map((p) => {
       const hand = subgame21.hands[p.id];
       const sum = hand[0].rank + hand[1].rank;
@@ -2332,6 +2436,7 @@
     }
     subgameRoulette.finalIdx = subgameRoulette.currentIdx;
     $('roulette-display').classList.remove('spinning');
+    playSE('roulette_stop');
     const ch = window.CHARACTERS[subgameRoulette.finalIdx];
     const matched = state.players.filter((p) => p.characterId === ch.id);
     const drinkers = matched.length > 0 ? matched : state.players.slice();
@@ -2464,6 +2569,7 @@
   }
 
   function renderHiloReveal(correct) {
+    playSE(correct ? 'success' : 'fail');
     $('hilo-content').innerHTML = `
       <div style="text-align:center; opacity:0.6; font-size:12px;">連続正解: ${subgameHilo.streak}</div>
       <div class="sg-cards" style="gap:8px;">
@@ -2697,6 +2803,7 @@
 
   function endTd(failed) {
     const p = subgameTd.player;
+    playSE(failed ? 'fail' : 'success');
     if (failed) {
       p.drinkCount += 1;
       state.history.push({
@@ -2758,6 +2865,7 @@
   // ===================================================
   function showResult() {
     clearAllTimers();
+    playSE('result_jingle');
     const ranked = state.players.slice().sort((a, b) => b.drinkCount - a.drinkCount);
     const list = $('ranking');
     list.innerHTML = '';
@@ -2855,6 +2963,7 @@
     initSubgameRoulette();
     initSubgameHilo();
     initSubgameTd();
+    initSoundToggle();
     $('btn-draw').addEventListener('click', () => { ensureAudioContext(); startDraw(); });
     $('btn-card-execute').addEventListener('click', executeCard);
     // 最初のユーザー操作で AudioContext を起こす（iOS Safari 対策）
