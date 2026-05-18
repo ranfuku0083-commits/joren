@@ -444,6 +444,36 @@
       color: var(--color-danger); font-size: 11px; font-weight: 800;
     }
 
+    /* ===== ルーレット ===== */
+    .roulette-display {
+      display: flex; flex-direction: column; align-items: center;
+      min-height: 200px; padding: 24px 0;
+      position: relative;
+    }
+    .roulette-display .char-img-xl {
+      filter: drop-shadow(0 0 24px rgba(232, 165, 71, 0.4));
+    }
+    .roulette-display.spinning .char-img-xl {
+      animation: roulette-shake 0.08s linear infinite alternate;
+    }
+    @keyframes roulette-shake {
+      0% { transform: translateX(-3px) rotate(-2deg); }
+      100% { transform: translateX(3px) rotate(2deg); }
+    }
+    .roulette-charname {
+      font-size: 22px; font-weight: 800; margin-top: 12px;
+      color: var(--color-accent-2); letter-spacing: 0.05em;
+    }
+    .roulette-result-label {
+      text-align: center; font-size: 11px; opacity: 0.6;
+      letter-spacing: 0.15em; margin-top: 4px;
+    }
+    .roulette-drinkers {
+      text-align: center; padding: 12px; margin-top: 8px;
+      background: var(--color-bg-secondary); border-radius: 12px;
+      font-size: 14px; font-weight: 700;
+    }
+
     /* ===== スキル発動ポップアップ ===== */
     .modal-backdrop {
       position: fixed; inset: 0;
@@ -749,6 +779,22 @@
   </section>
 
   <!-- ============================================ -->
+  <!-- サブゲーム: キャラクタールーレット             -->
+  <!-- ============================================ -->
+  <section id="screen-subgame-roulette" class="screen" aria-label="ルーレット">
+    <h2 class="screen-heading">🎰 キャラクタールーレット</h2>
+    <p class="screen-note">止まったキャラを選んだ人が一気。未選択なら全員一気。</p>
+
+    <div id="roulette-display" class="roulette-display spinning"></div>
+    <div id="roulette-controls"></div>
+    <div id="roulette-result" style="display:none;"></div>
+
+    <div class="actions" style="margin-top: 18px;">
+      <button id="btn-subgame-roulette-back" class="btn btn-ghost btn-block" type="button">＜ メニューに戻る</button>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
   <!-- 終了画面（スタッツ）                          -->
   <!-- ============================================ -->
   <section id="screen-result" class="screen" aria-label="終了画面">
@@ -798,6 +844,7 @@
       <div class="menu-section-title">🎲 サブゲーム</div>
       <div class="actions">
         <button id="btn-subgame-21" class="btn btn-secondary btn-block" type="button">🃏 21（ブラックジャック風）</button>
+        <button id="btn-subgame-roulette" class="btn btn-secondary btn-block" type="button">🎰 キャラクタールーレット</button>
       </div>
       <div class="menu-section-title">⚙ ゲーム操作</div>
       <div class="actions">
@@ -1971,6 +2018,128 @@
   }
 
   // ===================================================
+  // サブゲーム: キャラクタールーレット
+  // ===================================================
+  const subgameRoulette = {
+    timeoutHandle: null,
+    speed: 60,
+    currentIdx: 0,
+    decelerating: false,
+    finalIdx: null
+  };
+
+  function startSubgameRoulette() {
+    $('modal-menu').classList.remove('is-open');
+    if (subgameRoulette.timeoutHandle) {
+      clearTimeout(subgameRoulette.timeoutHandle);
+      subgameRoulette.timeoutHandle = null;
+    }
+    subgameRoulette.currentIdx = Math.floor(Math.random() * window.CHARACTERS.length);
+    subgameRoulette.speed = 60;
+    subgameRoulette.decelerating = false;
+    subgameRoulette.finalIdx = null;
+    showScreen('screen-subgame-roulette');
+    $('roulette-display').classList.add('spinning');
+    $('roulette-result').style.display = 'none';
+    $('roulette-controls').innerHTML = `
+      <div class="actions">
+        <button id="btn-roulette-stop" class="btn btn-primary btn-block" type="button" style="min-height: 88px; font-size: 22px;">🛑 STOP!</button>
+      </div>
+    `;
+    $('btn-roulette-stop').addEventListener('click', stopRoulette);
+    rouletteTick();
+  }
+
+  function rouletteTick() {
+    subgameRoulette.currentIdx = (subgameRoulette.currentIdx + 1) % window.CHARACTERS.length;
+    updateRouletteDisplay();
+    if (subgameRoulette.decelerating) {
+      subgameRoulette.speed = subgameRoulette.speed * 1.18;
+      if (subgameRoulette.speed >= 480) {
+        finishRoulette();
+        return;
+      }
+    }
+    subgameRoulette.timeoutHandle = setTimeout(rouletteTick, subgameRoulette.speed);
+  }
+
+  function updateRouletteDisplay() {
+    const ch = window.CHARACTERS[subgameRoulette.currentIdx];
+    $('roulette-display').innerHTML = `
+      ${charImg(ch.id, 'char-img-xl')}
+      <div class="roulette-charname">${ch.name}</div>
+    `;
+  }
+
+  function stopRoulette() {
+    if (subgameRoulette.decelerating) return;
+    subgameRoulette.decelerating = true;
+    const btn = $('btn-roulette-stop');
+    if (btn) btn.disabled = true;
+  }
+
+  function finishRoulette() {
+    if (subgameRoulette.timeoutHandle) {
+      clearTimeout(subgameRoulette.timeoutHandle);
+      subgameRoulette.timeoutHandle = null;
+    }
+    subgameRoulette.finalIdx = subgameRoulette.currentIdx;
+    $('roulette-display').classList.remove('spinning');
+    const ch = window.CHARACTERS[subgameRoulette.finalIdx];
+    const matched = state.players.filter((p) => p.characterId === ch.id);
+    const drinkers = matched.length > 0 ? matched : state.players.slice();
+    $('roulette-controls').innerHTML = '';
+    const drinkerLabel = matched.length > 0
+      ? matched.map((p) => `${charImg(p.characterId, 'char-img-xs')} ${escapeHtml(p.name)}`).join('・')
+      : '🍻 全員';
+    const r = $('roulette-result');
+    r.style.display = 'block';
+    r.innerHTML = `
+      <div class="roulette-result-label">止まったキャラ</div>
+      <div class="roulette-drinkers">
+        <div style="opacity:0.7; font-size:12px; margin-bottom:6px;">
+          ${matched.length > 0 ? '該当者' : '該当者なし → 全員'} 1杯
+        </div>
+        <div>${drinkerLabel}</div>
+      </div>
+      <div class="actions" style="margin-top: 14px;">
+        <button id="btn-roulette-apply" class="btn btn-primary btn-block" type="button">罰ゲーム適用してメインに戻る</button>
+        <button id="btn-roulette-replay" class="btn btn-secondary btn-block" type="button">もう一度</button>
+      </div>
+    `;
+    $('btn-roulette-apply').addEventListener('click', () => {
+      drinkers.forEach((p) => {
+        p.drinkCount += 1;
+        state.history.push({
+          turn: state.currentTurn,
+          timestamp: Date.now(),
+          cardId: null,
+          drawnBy: null,
+          targets: [p.id],
+          drinkers: [p.id],
+          subgame: 'roulette',
+          landed: ch.id
+        });
+      });
+      saveAll();
+      showScreen('screen-game');
+      renderCurrentTurn();
+    });
+    $('btn-roulette-replay').addEventListener('click', startSubgameRoulette);
+  }
+
+  function initSubgameRoulette() {
+    $('btn-subgame-roulette').addEventListener('click', startSubgameRoulette);
+    $('btn-subgame-roulette-back').addEventListener('click', () => {
+      if (subgameRoulette.timeoutHandle) {
+        clearTimeout(subgameRoulette.timeoutHandle);
+        subgameRoulette.timeoutHandle = null;
+      }
+      showScreen('screen-game');
+    });
+  }
+
+  // ===================================================
   // 渡す演出
   // ===================================================
   function showHandover() {
@@ -2091,6 +2260,7 @@
     initViolateModal();
     initPassModal();
     initSubgame21();
+    initSubgameRoulette();
     $('btn-draw').addEventListener('click', () => { ensureAudioContext(); startDraw(); });
     $('btn-card-execute').addEventListener('click', executeCard);
     // 最初のユーザー操作で AudioContext を起こす（iOS Safari 対策）
