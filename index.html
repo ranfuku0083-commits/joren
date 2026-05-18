@@ -809,6 +809,20 @@
   </section>
 
   <!-- ============================================ -->
+  <!-- サブゲーム: 真実か挑戦か                       -->
+  <!-- ============================================ -->
+  <section id="screen-subgame-td" class="screen" aria-label="真実か挑戦か">
+    <h2 class="screen-heading">🎭 真実か挑戦か</h2>
+    <p class="screen-note">真実は嘘ついたら1杯、挑戦は出来なかったら1杯。</p>
+
+    <div id="td-content"></div>
+
+    <div class="actions" style="margin-top: 18px;">
+      <button id="btn-subgame-td-back" class="btn btn-ghost btn-block" type="button">＜ メニューに戻る</button>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
   <!-- 終了画面（スタッツ）                          -->
   <!-- ============================================ -->
   <section id="screen-result" class="screen" aria-label="終了画面">
@@ -860,6 +874,7 @@
         <button id="btn-subgame-21" class="btn btn-secondary btn-block" type="button">🃏 21（ブラックジャック風）</button>
         <button id="btn-subgame-roulette" class="btn btn-secondary btn-block" type="button">🎰 キャラクタールーレット</button>
         <button id="btn-subgame-hilo" class="btn btn-secondary btn-block" type="button">⬆⬇ ハイ&ロー</button>
+        <button id="btn-subgame-td" class="btn btn-secondary btn-block" type="button">🎭 真実か挑戦か</button>
       </div>
       <div class="menu-section-title">⚙ ゲーム操作</div>
       <div class="actions">
@@ -2342,6 +2357,164 @@
   }
 
   // ===================================================
+  // サブゲーム: 真実か挑戦か
+  // ===================================================
+  const TRUTH_POOL = [
+    '今夜気になっている異性のタイプは？',
+    '過去に黒歴史だと思っている飲み会エピソードを1つ',
+    '言われて嬉しかったセリフベスト1',
+    '学生時代の一番ヤバかった夜の話',
+    '今までで一番恥ずかしかった飲みの失敗',
+    '直近1ヶ月で一番テンション上がったこと',
+    'ここにいる中で一番タイプな顔の人を理由付きで',
+    '最後に泣いたのはいつ、なぜ',
+    '親に言えない秘密を1つ',
+    '一番無駄遣いしたものは？金額付きで',
+    '過去最大の失恋エピソード',
+    'SNSで密かにフォローしている意外な人',
+    'ぶっちゃけ今の貯金額（雰囲気でOK）',
+    '直近で誰かに嫉妬した瞬間',
+    '飲み会で過去にやらかしたエピソードを1つ'
+  ];
+  const DARE_POOL = [
+    '1分間モノマネで会話する',
+    'スマホの最新LINE/メールタイトル3つ見せる',
+    '隣の人と腕組んで30秒キープ',
+    '一気飲み1杯',
+    '30秒間正座で姿勢キープ',
+    '即興で替え歌を1サビ歌う',
+    '隣の人の好きなところを3つ言う',
+    '1分間敬語禁止で話す',
+    'お腹に力を入れて『おはようございます』を可能な限り低い声で',
+    '30秒間隣の人と目を見つめ続ける',
+    'スマホの過去の写真からランダム1枚見せる',
+    '子供の頃の話を1分続ける',
+    '一発芸を1つ',
+    '隣の人になりきって自己紹介',
+    'ここの全員の良いところを1つずつ言う'
+  ];
+
+  const subgameTd = {
+    player: null,
+    type: null,
+    prompt: null
+  };
+
+  function startSubgameTd() {
+    $('modal-menu').classList.remove('is-open');
+    subgameTd.player = null;
+    subgameTd.type = null;
+    subgameTd.prompt = null;
+    showScreen('screen-subgame-td');
+    renderTdSelect();
+  }
+
+  function renderTdSelect() {
+    $('td-content').innerHTML = `
+      <p class="screen-note" style="text-align:center; margin-top: 12px;">誰がやる？</p>
+      <div id="td-player-grid" class="violate-grid"></div>
+    `;
+    const grid = $('td-player-grid');
+    state.players.forEach((p) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'violate-player';
+      btn.innerHTML = `${charImg(p.characterId, 'char-img-md')}<span class="name">${escapeHtml(p.name)}</span>`;
+      btn.addEventListener('click', () => {
+        subgameTd.player = p;
+        renderTdChoose();
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  function renderTdChoose() {
+    const p = subgameTd.player;
+    $('td-content').innerHTML = `
+      <div class="sg-player" style="margin: 14px 0;">
+        ${charImg(p.characterId, 'char-img-lg')}
+        <div class="name" style="font-size:18px;">${escapeHtml(p.name)}</div>
+      </div>
+      <p class="screen-note" style="text-align:center;">真実か、挑戦か？</p>
+      <div class="actions row" style="display:flex; gap:10px;">
+        <button id="btn-td-truth" class="btn btn-primary" style="flex:1; min-height:96px; font-size:18px;" type="button">💭<br/>真実</button>
+        <button id="btn-td-dare" class="btn btn-primary" style="flex:1; min-height:96px; font-size:18px;" type="button">⚡<br/>挑戦</button>
+      </div>
+    `;
+    $('btn-td-truth').addEventListener('click', () => pickTd('truth'));
+    $('btn-td-dare').addEventListener('click', () => pickTd('dare'));
+  }
+
+  function pickTd(type) {
+    subgameTd.type = type;
+    const pool = type === 'truth' ? TRUTH_POOL : DARE_POOL;
+    subgameTd.prompt = pool[Math.floor(Math.random() * pool.length)];
+    renderTdPrompt();
+  }
+
+  function renderTdPrompt() {
+    const p = subgameTd.player;
+    const t = subgameTd.type;
+    const label = t === 'truth' ? '💭 真実' : '⚡ 挑戦';
+    const okVerb = t === 'truth' ? '答えた' : 'やった';
+    const failVerb = t === 'truth' ? '嘘ついた' : '出来なかった';
+    $('td-content').innerHTML = `
+      <div style="text-align:center; margin: 10px 0;">
+        ${charImg(p.characterId, 'char-img-md')}
+        <span style="font-weight:700; margin-left: 6px;">${escapeHtml(p.name)}</span>
+      </div>
+      <div class="card-paper" style="margin: 12px 0; padding: 20px;">
+        <div class="card-hashtag">${label}</div>
+        <div class="card-text" style="font-size:17px; margin-top:14px;">${escapeHtml(subgameTd.prompt)}</div>
+      </div>
+      <div class="actions">
+        <button id="btn-td-success" class="btn btn-primary btn-block" type="button">✓ ${okVerb}</button>
+        <button id="btn-td-fail" class="btn btn-danger btn-block" type="button">✗ ${failVerb} → 1杯</button>
+        <button id="btn-td-reroll" class="btn btn-ghost btn-block" type="button">🔄 別のお題</button>
+      </div>
+    `;
+    $('btn-td-success').addEventListener('click', () => endTd(false));
+    $('btn-td-fail').addEventListener('click', () => endTd(true));
+    $('btn-td-reroll').addEventListener('click', () => pickTd(subgameTd.type));
+  }
+
+  function endTd(failed) {
+    const p = subgameTd.player;
+    if (failed) {
+      p.drinkCount += 1;
+      state.history.push({
+        turn: state.currentTurn, timestamp: Date.now(),
+        cardId: null, drawnBy: null,
+        targets: [p.id], drinkers: [p.id],
+        subgame: 'td', type: subgameTd.type, prompt: subgameTd.prompt
+      });
+      saveAll();
+    }
+    $('td-content').innerHTML = `
+      <div style="text-align:center; padding:30px 0;">
+        <div style="font-size:40px; font-weight:900; color: ${failed ? 'var(--color-danger)' : 'var(--color-accent-2)'};">
+          ${failed ? '🍺 1杯' : '👏 完了'}
+        </div>
+        <div style="margin-top:10px; opacity:0.85; font-weight:700;">${escapeHtml(p.name)}</div>
+      </div>
+      <div class="actions">
+        <button id="btn-td-replay" class="btn btn-primary btn-block" type="button">次の人がやる</button>
+        <button id="btn-td-back" class="btn btn-secondary btn-block" type="button">メインに戻る</button>
+      </div>
+    `;
+    $('btn-td-replay').addEventListener('click', startSubgameTd);
+    $('btn-td-back').addEventListener('click', () => {
+      showScreen('screen-game');
+      renderCurrentTurn();
+    });
+  }
+
+  function initSubgameTd() {
+    $('btn-subgame-td').addEventListener('click', startSubgameTd);
+    $('btn-subgame-td-back').addEventListener('click', () => showScreen('screen-game'));
+  }
+
+  // ===================================================
   // 渡す演出
   // ===================================================
   function showHandover() {
@@ -2464,6 +2637,7 @@
     initSubgame21();
     initSubgameRoulette();
     initSubgameHilo();
+    initSubgameTd();
     $('btn-draw').addEventListener('click', () => { ensureAudioContext(); startDraw(); });
     $('btn-card-execute').addEventListener('click', executeCard);
     // 最初のユーザー操作で AudioContext を起こす（iOS Safari 対策）
