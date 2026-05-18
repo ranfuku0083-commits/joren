@@ -368,6 +368,17 @@
     }
     .violate-player:active { transform: scale(0.97); }
     .violate-player .name { font-weight: 700; flex: 1; text-align: left; }
+    .violate-player .pass-count {
+      font-size: 11px; padding: 2px 6px; border-radius: 999px;
+      background: rgba(143, 166, 142, 0.25); color: var(--color-success);
+      font-weight: 700;
+    }
+    .violate-player:disabled {
+      opacity: 0.35; cursor: not-allowed;
+    }
+    .violate-player:disabled .pass-count {
+      background: rgba(245, 230, 203, 0.1); color: var(--color-text-primary);
+    }
 
     /* ===== スキル発動ポップアップ ===== */
     .modal-backdrop {
@@ -608,6 +619,10 @@
         <div class="lbl">⚡ スキル残</div>
       </div>
       <div class="stat">
+        <div class="num" id="stat-pass">2</div>
+        <div class="lbl">🛟 パス残</div>
+      </div>
+      <div class="stat">
         <div class="num" id="stat-turn">1</div>
         <div class="lbl">ターン</div>
       </div>
@@ -637,6 +652,7 @@
     </div>
 
     <div class="actions">
+      <button id="btn-pass-use" class="btn btn-secondary btn-block" type="button" style="display:none;">🛟 パスで回避</button>
       <button id="btn-card-execute" class="btn btn-primary btn-block" type="button">実行した（飲んだ）</button>
     </div>
   </section>
@@ -705,6 +721,18 @@
         <button id="btn-menu-reset"  class="btn btn-danger btn-block"  type="button">最初からやり直す</button>
         <button id="btn-menu-close"  class="btn btn-ghost"             type="button">閉じる</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- モーダル: パス使用                            -->
+  <!-- ============================================ -->
+  <div id="modal-pass" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-box menu">
+      <h3>🛟 パスを使う</h3>
+      <p class="desc">罰ゲームから1人を回避させる</p>
+      <div id="pass-player-list" class="violate-grid"></div>
+      <button id="btn-pass-cancel" class="btn btn-ghost btn-block" type="button">キャンセル</button>
     </div>
   </div>
 
@@ -778,6 +806,7 @@
 
   const MAX_PLAYERS = 8;
   const MIN_PLAYERS = 2;
+  const MAX_PASSES  = 2;
 
   // ===================================================
   // 状態（メモリ + LocalStorage に永続化）
@@ -1140,6 +1169,8 @@
     state.players = shuffle(state.players);
     state.currentPlayerIndex = 0;
     state.currentTurn = 1;
+    // パスカード初期配布
+    state.players.forEach((p) => { p.passRemaining = MAX_PASSES; });
     // デッキ初期化
     state.deck = {
       remaining: shuffle(window.CARDS.map((c) => c.id)),
@@ -1197,6 +1228,7 @@
     $('stat-skill').textContent = ch.skill.maxUses >= 999
       ? '∞'
       : (ch.skill.maxUses - p.skillUsedCount) + '/' + ch.skill.maxUses;
+    $('stat-pass').textContent = (p.passRemaining ?? MAX_PASSES) + '/' + MAX_PASSES;
     $('stat-turn').textContent = state.currentTurn;
   }
 
@@ -1322,6 +1354,7 @@
         list.appendChild(note);
       }
     }
+    updatePassButtonVisibility();
   }
 
   // ===================================================
@@ -1607,6 +1640,71 @@
   }
 
   // ===================================================
+  // パスカード（救済措置）
+  // ===================================================
+  function updatePassButtonVisibility() {
+    const btn = $('btn-pass-use');
+    if (!btn) return;
+    if (!state.pendingCard ||
+        state.pendingCard.targetType === 'situation' ||
+        state.pendingTargets.length === 0) {
+      btn.style.display = 'none';
+      return;
+    }
+    const hasEligibleTarget = state.pendingTargets.some((pid) => {
+      const p = state.players.find((x) => x.id === pid);
+      return p && (p.passRemaining ?? MAX_PASSES) > 0;
+    });
+    btn.style.display = hasEligibleTarget ? '' : 'none';
+  }
+
+  function openPassModal() {
+    const list = $('pass-player-list');
+    list.innerHTML = '';
+    state.pendingTargets.forEach((pid) => {
+      const p = state.players.find((x) => x.id === pid);
+      if (!p) return;
+      const remaining = p.passRemaining ?? MAX_PASSES;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'violate-player';
+      btn.disabled = remaining <= 0;
+      btn.innerHTML = `
+        ${charImg(p.characterId, 'char-img-md')}
+        <span class="name">${escapeHtml(p.name)}</span>
+        <span class="pass-count">残 ${remaining}</span>
+      `;
+      btn.addEventListener('click', () => usePass(p.id));
+      list.appendChild(btn);
+    });
+    $('modal-pass').classList.add('is-open');
+  }
+
+  function usePass(playerId) {
+    const p = state.players.find((x) => x.id === playerId);
+    if (!p || (p.passRemaining ?? MAX_PASSES) <= 0) return;
+    p.passRemaining = (p.passRemaining ?? MAX_PASSES) - 1;
+    state.pendingTargets = state.pendingTargets.filter((pid) => pid !== playerId);
+    state.history.push({
+      turn: state.currentTurn,
+      timestamp: Date.now(),
+      cardId: state.pendingCard ? state.pendingCard.id : null,
+      drawnBy: currentPlayer().id,
+      targets: state.pendingTargets.slice(),
+      drinkers: [],
+      passUsedBy: playerId
+    });
+    saveAll();
+    $('modal-pass').classList.remove('is-open');
+    if (state.pendingCard) renderCard(state.pendingCard);
+  }
+
+  function initPassModal() {
+    $('btn-pass-use').addEventListener('click', openPassModal);
+    $('btn-pass-cancel').addEventListener('click', () => $('modal-pass').classList.remove('is-open'));
+  }
+
+  // ===================================================
   // 渡す演出
   // ===================================================
   function showHandover() {
@@ -1638,12 +1736,13 @@
     list.innerHTML = '';
     ranked.forEach((p, idx) => {
       const ch = getCharacterById(p.characterId);
+      const passUsed = MAX_PASSES - (p.passRemaining ?? MAX_PASSES);
       const row = document.createElement('div');
       row.className = 'row rank-' + (idx + 1);
       row.innerHTML = `
         <span class="rank">${idx + 1}位</span>
         ${charImg(ch.id, 'char-img-md')}
-        <span class="name">${escapeHtml(p.name)}<br><small style="opacity:0.6;font-size:11px;">${ch.name}</small></span>
+        <span class="name">${escapeHtml(p.name)}<br><small style="opacity:0.6;font-size:11px;">${ch.name} ・ 🛟 ${passUsed}/${MAX_PASSES}</small></span>
         <span class="count">${p.drinkCount} 回</span>
       `;
       list.appendChild(row);
@@ -1660,7 +1759,11 @@
   function initResult() {
     $('btn-replay').addEventListener('click', () => {
       // プレイヤーとキャラはそのまま、カウントだけリセット
-      state.players.forEach((p) => { p.drinkCount = 0; p.skillUsedCount = 0; });
+      state.players.forEach((p) => {
+        p.drinkCount = 0;
+        p.skillUsedCount = 0;
+        p.passRemaining = MAX_PASSES;
+      });
       state.deck = {
         remaining: shuffle(window.CARDS.map((c) => c.id)),
         used: [],
@@ -1720,6 +1823,7 @@
     initResult();
     initMenu();
     initViolateModal();
+    initPassModal();
     $('btn-draw').addEventListener('click', () => { ensureAudioContext(); startDraw(); });
     $('btn-card-execute').addEventListener('click', executeCard);
     // 最初のユーザー操作で AudioContext を起こす（iOS Safari 対策）
