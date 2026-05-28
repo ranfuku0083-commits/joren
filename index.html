@@ -947,7 +947,7 @@
   <!-- ============================================ -->
   <section id="screen-subgame-21" class="screen" aria-label="21">
     <h2 class="screen-heading">🃏 21（ブラックジャック風）</h2>
-    <p class="screen-note">合計21に一番近づけよう。21に一番遠い人＆バースト者が1杯。</p>
+    <p class="screen-note">合計を21に近づけよう。21との差が一番遠い人が1杯（同率は全員）。21超えてもOK。</p>
 
     <div id="sg21-view"></div>
     <div id="sg21-reveal" style="display:none;"></div>
@@ -2403,38 +2403,38 @@
     $('sg21-view').style.display = 'none';
     $('sg21-reveal').style.display = 'block';
     playSE('result_jingle');
+    // 常連ルール: 21との差の絶対値で判定。21を超えてもOK。
     const results = state.players.map((p) => {
       const hand = subgame21.hands[p.id];
       const sum = hand[0].rank + hand[1].rank;
-      return { player: p, hand, sum, bust: sum > 21, distance: 21 - sum };
+      return { player: p, hand, sum, distance: Math.abs(21 - sum) };
     });
-    // 敗者: バースト全員 + 非バーストで21に一番遠い
-    const nonBust = results.filter((r) => !r.bust);
-    let losers = results.filter((r) => r.bust);
-    if (nonBust.length > 0) {
-      const maxDist = Math.max(...nonBust.map((r) => r.distance));
-      losers = losers.concat(nonBust.filter((r) => r.distance === maxDist));
-    }
-    // 表示順: 21に近い順、バーストは末尾
-    const sorted = results.slice().sort((a, b) => {
-      if (a.bust !== b.bust) return a.bust ? 1 : -1;
-      if (a.bust) return b.sum - a.sum;
-      return a.distance - b.distance;
-    });
-    const winner = sorted.find((r) => !r.bust && !losers.includes(r));
+    const minDist = Math.min(...results.map((r) => r.distance));
+    const maxDist = Math.max(...results.map((r) => r.distance));
+    // 全員同率なら勝敗なし（ドロー）
+    const allDraw = minDist === maxDist;
+    const winners = allDraw ? [] : results.filter((r) => r.distance === minDist);
+    const losers  = allDraw ? [] : results.filter((r) => r.distance === maxDist);
+    // 表示順: 差が小さい順（21に近い人が上）
+    const sorted = results.slice().sort((a, b) => a.distance - b.distance);
     let html = '<h3 style="margin: 0 0 10px;">結果発表！</h3>';
+    if (allDraw) {
+      html += `<div style="text-align:center; opacity:0.85; margin-bottom:10px; font-weight:700;">🤝 全員ドロー！罰ゲームなし</div>`;
+    }
     sorted.forEach((res) => {
-      const isLoser = losers.includes(res);
-      const isWinner = res === winner;
-      let label = '';
-      if (res.bust) label = 'BUST';
-      else if (isWinner) label = '👑 勝者';
+      const isWinner = winners.includes(res);
+      const isLoser  = losers.includes(res);
+      const labelParts = [];
+      if (isWinner) labelParts.push(winners.length > 1 ? '👑 勝者（同率）' : '👑 勝者');
+      else if (isLoser) labelParts.push(losers.length > 1 ? '😵 敗者（同率）' : '😵 敗者');
+      const label = labelParts.join(' ');
       html += `
         <div class="sg21-result-row ${isLoser ? 'loser' : ''} ${isWinner ? 'winner' : ''}">
           ${charImg(res.player.characterId, 'char-img-md')}
           <span class="name">${escapeHtml(res.player.name)}</span>
           <div class="sg-cards-mini">${renderSgCard(res.hand[0])}${renderSgCard(res.hand[1])}</div>
           <span class="sum">${res.sum}</span>
+          <span class="rank-label" style="opacity:0.7;">差${res.distance}</span>
           ${label ? `<span class="rank-label">${label}</span>` : ''}
           ${isLoser ? '<span class="loser-label">1杯！</span>' : ''}
         </div>
@@ -2458,7 +2458,7 @@
           targets: [res.player.id],
           drinkers: [res.player.id],
           subgame: '21',
-          bust: res.bust
+          distance: res.distance
         });
       });
       saveAll();
