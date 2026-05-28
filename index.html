@@ -1791,11 +1791,30 @@
     }
   }
 
+  function executeButtonLabel(card) {
+    switch (card.category) {
+      case '乾杯':     return '🍻 乾杯した';
+      case '一気':     return '🍺 飲んだ';
+      case '指名':     return '👉 指名した';
+      case '記憶':     return '🧠 判定した';
+      case 'ミッション': return '⏱ ミッション開始';
+      case 'サブゲーム': return '🎲 サブゲームへ進む';
+      case 'ペア':     return '🍷 乾杯した';
+      case '王様':     return '👑 命令した';
+      case '観察':     return '👀 判定した';
+      case 'BAR':      return '🍸 答えた';
+      case '雰囲気':   return '🌙 やった';
+      case '特殊':     return '✨ 実行した';
+      default:         return '実行した';
+    }
+  }
+
   function renderCard(card) {
     $('card-hashtag').textContent = card.hashtag;
     $('card-category').textContent = card.category;
     $('card-text').textContent = card.text;
     $('card-instruction-text').textContent = buildInstruction(card);
+    $('btn-card-execute').textContent = executeButtonLabel(card);
     const list = $('card-targets-list');
     list.innerHTML = '';
     if (card.targetType === 'situation') {
