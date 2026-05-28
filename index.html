@@ -2375,16 +2375,34 @@
     const hand = subgame21.hands[p.id];
     const swapped = subgame21.swapped[p.id];
     const sum = hand[0].rank + hand[1].rank;
+    const actionsHtml = swapped
+      ? `<div class="actions"><button id="btn-sg21-keep" class="btn btn-primary btn-block" type="button">確定する</button></div>`
+      : `
+        <p class="screen-note" style="text-align:center; margin-top: 8px;">どうする？（交換は1回まで）</p>
+        <div class="actions">
+          <button id="btn-sg21-keep" class="btn btn-primary btn-block" type="button">そのまま確定</button>
+          <button id="btn-sg21-swap-l" class="btn btn-secondary btn-block" type="button">⬅ 左だけ交換</button>
+          <button id="btn-sg21-swap-r" class="btn btn-secondary btn-block" type="button">右だけ交換 ➡</button>
+          <button id="btn-sg21-swap-both" class="btn btn-secondary btn-block" type="button">🔄 2枚とも交換</button>
+        </div>
+      `;
     $('sg21-hand-area').innerHTML = `
       <div class="sg-cards">${renderSgCard(hand[0])}${renderSgCard(hand[1])}</div>
       <div class="sg-total">合計 ${sum}</div>
-      <div class="actions">
-        ${!swapped ? '<button id="btn-sg21-swap" class="btn btn-secondary btn-block" type="button">2枚とも交換</button>' : ''}
-        <button id="btn-sg21-keep" class="btn btn-primary btn-block" type="button">${swapped ? '確定する' : 'このまま確定'}</button>
-      </div>
+      ${actionsHtml}
     `;
     if (!swapped) {
-      $('btn-sg21-swap').addEventListener('click', () => {
+      $('btn-sg21-swap-l').addEventListener('click', () => {
+        subgame21.hands[p.id] = [subgame21.deck.pop(), hand[1]];
+        subgame21.swapped[p.id] = true;
+        showSg21Hand(p);
+      });
+      $('btn-sg21-swap-r').addEventListener('click', () => {
+        subgame21.hands[p.id] = [hand[0], subgame21.deck.pop()];
+        subgame21.swapped[p.id] = true;
+        showSg21Hand(p);
+      });
+      $('btn-sg21-swap-both').addEventListener('click', () => {
         subgame21.hands[p.id] = [subgame21.deck.pop(), subgame21.deck.pop()];
         subgame21.swapped[p.id] = true;
         showSg21Hand(p);
