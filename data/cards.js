@@ -167,7 +167,16 @@ const CARDS = [
   { id: 108, category: 'BAR', hashtag: '#閉店間際', text: '帰りたくない理由をそれっぽく語れ！', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
   { id: 109, category: 'BAR', hashtag: '#カウンター席', text: '右隣の人と「常連っぽい会話」を10秒間続けろ！', targetType: 'situation', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
   { id: 110, category: 'BAR', hashtag: '#隠れ名店', text: 'このBARの裏設定を1つ追加しろ！（例：マスターが元ボクサー）', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
-  { id: 111, category: 'BAR', hashtag: '#深夜テンション', text: '今の店内の空気を一言で表せ！', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] }
+  { id: 111, category: 'BAR', hashtag: '#深夜テンション', text: '今の店内の空気を一言で表せ！', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
+
+  // ========= 3.12 #雰囲気系（6枚） =========
+  // 飲ませるゲームより「BAR空間を演出する」カード群。罰ゲームなしの空気作り。
+  { id: 112, category: '雰囲気', hashtag: '#黄昏タイム', text: '全員、5秒間静かに自分の酒を見つめろ。', targetType: 'all', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: [], triggerTags: ['雰囲気'] },
+  { id: 113, category: '雰囲気', hashtag: '#ネオンの夜', text: '今夜の雰囲気に一番合ってる人を全員で指差して決めろ！', targetType: 'situation', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: [], triggerTags: ['雰囲気'] },
+  { id: 114, category: '雰囲気', hashtag: '#夜風', text: '今夜っぽい一言を言え！', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: [], triggerTags: ['雰囲気'] },
+  { id: 115, category: '雰囲気', hashtag: '#都会のBAR', text: '全員、急に都会人っぽく話し始めろ。', targetType: 'all', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: [], triggerTags: ['雰囲気'] },
+  { id: 116, category: '雰囲気', hashtag: '#常連ムーブ', text: 'この店に10年通ってます感を出せ！', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: [], triggerTags: ['雰囲気'] },
+  { id: 117, category: '雰囲気', hashtag: '#グラス越し', text: '今一番いい顔してる人を全員で指差せ！', targetType: 'situation', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: [], triggerTags: ['雰囲気'] }
 ];
 
 // グローバル公開（モジュール非対応の単一HTML構成のため）
