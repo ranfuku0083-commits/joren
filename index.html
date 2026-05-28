@@ -1148,8 +1148,12 @@
     pendingSkillTriggers: [], // スキル発動候補
     pendingSkillIndex: 0,
     activeTimers: [],     // [{ id, cardId, hashtag, text, duration, endsAt, alarmTriggered }]
-    pendingViolateTimerId: null // 違反者選択モーダル展開中のタイマーID
+    pendingViolateTimerId: null, // 違反者選択モーダル展開中のタイマーID
+    pendingSkillTimeoutId: null  // スキル表示遅延タイマーID
   };
+
+  // カード表示後にスキルモーダルを出すまでの遅延（ms）
+  const SKILL_REVEAL_DELAY = 2500;
 
   // Web Audio API（アラーム用 + 効果音）
   let audioCtx = null;
@@ -1629,8 +1633,22 @@
       renderCard(card);
       showScreen('screen-card');
       playSE('card_reveal');
-      processNextSkillTrigger();
+      // カード内容を先に把握してもらうため、スキルモーダルは少し遅らせて表示
+      cancelPendingSkillReveal();
+      if (state.pendingSkillTriggers.length > 0) {
+        state.pendingSkillTimeoutId = setTimeout(() => {
+          state.pendingSkillTimeoutId = null;
+          processNextSkillTrigger();
+        }, SKILL_REVEAL_DELAY);
+      }
     });
+  }
+
+  function cancelPendingSkillReveal() {
+    if (state.pendingSkillTimeoutId) {
+      clearTimeout(state.pendingSkillTimeoutId);
+      state.pendingSkillTimeoutId = null;
+    }
   }
 
   function runCountdown(n, done) {
@@ -1808,6 +1826,7 @@
   // 飲んだカウント & 履歴記録
   // ===================================================
   function executeCard() {
+    cancelPendingSkillReveal();
     const card = state.pendingCard;
     const drinkCount = card.drinkCount || 0;
     const drinkers = [];
