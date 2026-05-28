@@ -15,7 +15,8 @@ const CHARACTERS = [
       description: '#乾杯系カードで自分が当たった時、他1人を巻き込んで一緒に乾杯',
       triggerTags: ['乾杯'],
       maxUses: 3,
-      type: 'active'
+      type: 'active',
+      actionLabel: '1人巻き込む'
     },
     demerit: {
       name: '乾杯磁石',
@@ -35,7 +36,8 @@ const CHARACTERS = [
       description: '#ペア系カードで自分が当たった時、相方を自由に指名',
       triggerTags: ['ペア'],
       maxUses: 3,
-      type: 'active'
+      type: 'active',
+      actionLabel: '相方を指名する'
     },
     demerit: {
       name: 'ペア指名されし者',
@@ -55,7 +57,8 @@ const CHARACTERS = [
       description: '#記憶系カードで履歴を5秒間チラ見できる',
       triggerTags: ['記憶'],
       maxUses: 3,
-      type: 'active'
+      type: 'active',
+      actionLabel: '履歴を見る'
     },
     demerit: {
       name: '老体の限界',
@@ -76,7 +79,8 @@ const CHARACTERS = [
       description: '#指名系カードで他人が指名対象の時、横取りして自分が受ける',
       triggerTags: ['指名'],
       maxUses: 2,
-      type: 'active'
+      type: 'active',
+      actionLabel: '注目を横取り'
     },
     demerit: {
       name: '人気者の宿命',
@@ -96,7 +100,8 @@ const CHARACTERS = [
       description: '#一気系カードで自分が当たった時、他2人を巻き込める',
       triggerTags: ['一気'],
       maxUses: 3,
-      type: 'active'
+      type: 'active',
+      actionLabel: '2人巻き込む'
     },
     demerit: {
       name: '氷の代償',
@@ -116,7 +121,8 @@ const CHARACTERS = [
       description: '#記憶系・#反応速度系で失敗しても罰ゲーム免除',
       triggerTags: ['記憶', '反応速度'],
       maxUses: 3,
-      type: 'passive'
+      type: 'passive',
+      actionLabel: '失敗しても飲まない'
     },
     demerit: {
       name: '酔いゲージMAX',
@@ -137,7 +143,8 @@ const CHARACTERS = [
       description: '#王様タイム・#命令系カードで命令内容を決める権利',
       triggerTags: ['王様', '命令'],
       maxUses: 2,
-      type: 'active'
+      type: 'active',
+      actionLabel: '命令を決める'
     },
     demerit: {
       name: '中立の縛り',
@@ -157,7 +164,8 @@ const CHARACTERS = [
       description: '直前のお題で誰が何をしたか正確に証言できる',
       triggerTags: ['観察', '記憶'],
       maxUses: 3,
-      type: 'active'
+      type: 'active',
+      actionLabel: '証言する'
     },
     demerit: {
       name: '素面の代償',

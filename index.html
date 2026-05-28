@@ -1017,7 +1017,7 @@
       <div class="remaining" id="skill-remaining">残り 0 回</div>
       <div class="actions">
         <button id="btn-skill-use"  class="btn btn-primary btn-block" type="button">発動する</button>
-        <button id="btn-skill-pass" class="btn btn-secondary btn-block" type="button">パスする</button>
+        <button id="btn-skill-pass" class="btn btn-secondary btn-block" type="button">普通に挑戦する</button>
       </div>
     </div>
   </div>
@@ -1793,6 +1793,7 @@
     $('skill-remaining').textContent = trig.character.skill.maxUses >= 999
       ? '使用無制限'
       : '残り ' + trig.remaining + ' 回';
+    $('btn-skill-use').textContent = trig.character.skill.actionLabel || '発動する';
     $('modal-skill').classList.add('is-open');
     playSE('skill_proc');
   }
