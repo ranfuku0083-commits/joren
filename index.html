@@ -737,6 +737,53 @@
     .current-turn-card .char-img { width: 128px; height: 128px; }
     .modal-box .char-img { width: 96px; height: 96px; margin: 8px 0; }
 
+    /* ===== 突発イベント（ストーリーモード） ===== */
+    body.event-blackout { background: #050505; color: #888; }
+    body.event-blackout .topbar { background: rgba(10, 10, 10, 0.92); border-bottom-color: rgba(120, 120, 120, 0.2); }
+    body.event-blackout .current-turn-card,
+    body.event-blackout .card-paper,
+    body.event-blackout .game-status,
+    body.event-blackout .mode-select,
+    body.event-blackout .selection-status { background: #0a0a0a; color: #aaa; }
+    body.event-blackout .draw-btn { background: #444; box-shadow: none; }
+
+    body.event-midnight { background: #1a0d2e; }
+    body.event-midnight .topbar { background: rgba(40, 18, 70, 0.9); }
+    body.event-midnight .current-turn-card { background: linear-gradient(135deg, #2a1654, rgba(110, 60, 160, 0.45)); }
+    body.event-midnight .card-paper { background: linear-gradient(160deg, #2a1654, #1a0d2e); border-color: rgba(180, 120, 255, 0.35); }
+    body.event-midnight .draw-btn { background: #B36BFF; box-shadow: 0 0 28px rgba(179, 107, 255, 0.5); }
+
+    body.event-lastorder { background: #2d1a14; }
+    body.event-lastorder .topbar { background: rgba(60, 32, 22, 0.9); }
+    body.event-lastorder .draw-btn { background: var(--color-accent-2); color: #2d1a14; box-shadow: 0 0 28px rgba(232, 165, 71, 0.5); }
+
+    body.event-rainy { background: #15212e; }
+    body.event-rainy .topbar { background: rgba(28, 44, 60, 0.9); }
+    body.event-rainy .current-turn-card { background: linear-gradient(135deg, #1e2f42, rgba(70, 110, 145, 0.35)); }
+
+    body.event-fever { animation: feverBg 0.7s steps(2) infinite; }
+    body.event-fever .draw-btn { animation: feverBtn 0.4s steps(2) infinite; }
+    @keyframes feverBg {
+      0%, 100% { background: #1B2845; }
+      50%      { background: #4A1A4D; }
+    }
+    @keyframes feverBtn {
+      0%, 100% { box-shadow: 0 0 24px rgba(255, 77, 141, 0.5); }
+      50%      { box-shadow: 0 0 40px rgba(255, 215, 0, 0.8); background: #FFD700; color: #1B2845; }
+    }
+
+    .event-banner {
+      width: 100%; max-width: 480px; margin: 0 auto;
+      padding: 8px 14px;
+      background: rgba(232, 165, 71, 0.18);
+      border-bottom: 1px solid rgba(232, 165, 71, 0.4);
+      font-size: 13px; font-weight: 700;
+      color: var(--color-accent-2);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .event-banner .ev-name { flex: 1; }
+    .event-banner .ev-remaining { font-size: 11px; opacity: 0.85; }
+
     /* ===== フッター ===== */
     .app-footer {
       text-align: center; padding: 12px 16px;
@@ -853,6 +900,11 @@
     <span id="round-label">Round 1</span>
     <button id="btn-open-menu" class="menu-btn" type="button" aria-label="メニュー">⚙</button>
   </header>
+
+  <!-- ============================================ -->
+  <!-- 突発イベントバナー（常駐）                    -->
+  <!-- ============================================ -->
+  <div id="event-banner" class="event-banner" style="display:none;" aria-live="polite"></div>
 
   <!-- ============================================ -->
   <!-- ミッションタイマー（常駐）                    -->
@@ -1093,6 +1145,21 @@
   </div>
 
   <!-- ============================================ -->
+  <!-- モーダル: 突発イベント告知                     -->
+  <!-- ============================================ -->
+  <div id="modal-story-event" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-box story-event">
+      <div class="icon" id="story-event-icon">🌙</div>
+      <div class="label" id="story-event-subtitle">何かが起きた</div>
+      <div class="skill-desc" id="story-event-desc" style="margin: 14px 0;"></div>
+      <div class="remaining" id="story-event-duration"></div>
+      <div class="actions">
+        <button id="btn-story-event-close" class="btn btn-primary btn-block" type="button">了解！</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
   <!-- モーダル: リセット確認                        -->
   <!-- ============================================ -->
   <div id="modal-reset" class="modal-backdrop" role="dialog" aria-modal="true">
@@ -1170,8 +1237,64 @@
     activeTimers: [],     // [{ id, cardId, hashtag, text, duration, endsAt, alarmTriggered }]
     pendingViolateTimerId: null, // 違反者選択モーダル展開中のタイマーID
     pendingSkillTimeoutId: null, // スキル表示遅延タイマーID
-    subgameContext: null  // 'menu' | 'card' — サブゲーム起動経路
+    subgameContext: null, // 'menu' | 'card' — サブゲーム起動経路
+    activeEvent: null,    // 進行中の突発イベント
+    eventCooldown: 0      // 次の突発イベントまでのクールタイム（ターン）
   };
+
+  // ===================================================
+  // 突発イベント定義
+  // ===================================================
+  const STORY_EVENTS = [
+    {
+      id: 'blackout',
+      title: '⚫ 停電',
+      subtitle: 'BARが停電した…',
+      description: '次の30秒、ささやき声限定！声を出したら1杯。',
+      durationTurns: 1,
+      theme: 'blackout',
+      biasCategories: { '雰囲気': 3 }
+    },
+    {
+      id: 'midnight',
+      title: '🌙 深夜モード',
+      subtitle: '時刻は深夜2時を回った…',
+      description: 'BARの空気が濃くなる。BAR系・雰囲気系が出やすくなる。',
+      durationTurns: 4,
+      theme: 'midnight',
+      biasCategories: { 'BAR': 4, '雰囲気': 2 }
+    },
+    {
+      id: 'lastorder',
+      title: '🔔 ラストオーダー',
+      subtitle: 'ラストオーダーです。',
+      description: '次の数ターン、乾杯系の出現率UP！',
+      durationTurns: 3,
+      theme: 'lastorder',
+      biasCategories: { '乾杯': 4 }
+    },
+    {
+      id: 'rainy',
+      title: '🌧 雨の夜',
+      subtitle: '外は雨…',
+      description: '静かな夜。BAR系・雰囲気系・記憶系が出やすい。',
+      durationTurns: 4,
+      theme: 'rainy',
+      biasCategories: { 'BAR': 3, '雰囲気': 3, '記憶': 2 }
+    },
+    {
+      id: 'fever',
+      title: '🎉 フィーバータイム',
+      subtitle: '急にBARが盛り上がってきた！',
+      description: '次の数ターン、一気・指名・乾杯系の出現率UP！',
+      durationTurns: 3,
+      theme: 'fever',
+      biasCategories: { '一気': 3, '指名': 3, '乾杯': 2 }
+    }
+  ];
+
+  const EVENT_TRIGGER_PROB = 0.08;
+  const EVENT_COOLDOWN_TURNS = 5;
 
   // カード表示後にスキルモーダルを出すまでの遅延（ms）
   const SKILL_REVEAL_DELAY = 2500;
@@ -1274,6 +1397,9 @@
     state.pendingCard = null;
     state.pendingTargets = [];
     state.pendingSkillTriggers = [];
+    state.activeEvent = null;
+    state.eventCooldown = 0;
+    applyStoryEventTheme();
     clearAllTimers();
   }
 
@@ -1299,7 +1425,30 @@
       });
     }
     renderActiveTimers();
+    renderEventBanner();
     window.scrollTo(0, 0);
+  }
+
+  function renderEventBanner() {
+    const wrap = $('event-banner');
+    if (!wrap) return;
+    const noBannerScreens = [
+      'screen-launch', 'screen-register',
+      'screen-char-manual', 'screen-char-random',
+      'screen-turn-order', 'screen-result'
+    ];
+    const onNoBannerScreen = noBannerScreens.some((id) => $(id).classList.contains('is-active'));
+    if (!state.activeEvent || onNoBannerScreen) {
+      wrap.style.display = 'none';
+      wrap.innerHTML = '';
+      return;
+    }
+    const ev = state.activeEvent;
+    wrap.style.display = 'flex';
+    wrap.innerHTML = `
+      <span class="ev-name">${escapeHtml(ev.title)} ${escapeHtml(ev.subtitle)}</span>
+      <span class="ev-remaining">残り ${ev.remainingTurns} ターン</span>
+    `;
   }
 
   // ===================================================
@@ -1696,12 +1845,88 @@
       state.deck.remaining = shuffle(window.CARDS.map((c) => c.id));
       state.deck.used = [];
     }
-    const idx = Math.floor(Math.random() * state.deck.remaining.length);
+    const bias = state.activeEvent && state.activeEvent.biasCategories;
+    let idx;
+    if (bias) {
+      const weights = state.deck.remaining.map((cid) => {
+        const c = getCardById(cid);
+        return c ? (bias[c.category] || 1) : 1;
+      });
+      const total = weights.reduce((s, w) => s + w, 0);
+      let r = Math.random() * total;
+      idx = 0;
+      for (let i = 0; i < weights.length; i++) {
+        r -= weights[i];
+        if (r <= 0) { idx = i; break; }
+      }
+    } else {
+      idx = Math.floor(Math.random() * state.deck.remaining.length);
+    }
     const cardId = state.deck.remaining[idx];
     state.deck.remaining.splice(idx, 1);
     state.deck.used.push(cardId);
     state.deck.totalDrawn++;
     return getCardById(cardId);
+  }
+
+  // ===================================================
+  // 突発イベント
+  // ===================================================
+  function maybeTickAndTriggerEvent() {
+    // 進行中イベントがあれば残ターンを減らし、0になったら終了
+    if (state.activeEvent) {
+      state.activeEvent.remainingTurns--;
+      if (state.activeEvent.remainingTurns <= 0) {
+        clearStoryEvent();
+      }
+      return null;
+    }
+    if (state.eventCooldown > 0) {
+      state.eventCooldown--;
+      return null;
+    }
+    if (Math.random() < EVENT_TRIGGER_PROB) {
+      const ev = STORY_EVENTS[Math.floor(Math.random() * STORY_EVENTS.length)];
+      startStoryEvent(ev);
+      return state.activeEvent;
+    }
+    return null;
+  }
+
+  function startStoryEvent(ev) {
+    state.activeEvent = Object.assign({}, ev, { remainingTurns: ev.durationTurns });
+    state.eventCooldown = EVENT_COOLDOWN_TURNS;
+    applyStoryEventTheme();
+    renderEventBanner();
+  }
+
+  function clearStoryEvent() {
+    state.activeEvent = null;
+    applyStoryEventTheme();
+    renderEventBanner();
+  }
+
+  function applyStoryEventTheme() {
+    const themes = ['event-blackout', 'event-midnight', 'event-lastorder', 'event-rainy', 'event-fever'];
+    themes.forEach((t) => document.body.classList.remove(t));
+    if (state.activeEvent && state.activeEvent.theme) {
+      document.body.classList.add('event-' + state.activeEvent.theme);
+    }
+  }
+
+  function showStoryEventModal(ev) {
+    $('story-event-icon').textContent = ev.title;
+    $('story-event-subtitle').textContent = ev.subtitle;
+    $('story-event-desc').textContent = ev.description;
+    $('story-event-duration').textContent = ev.durationTurns + ' ターン続く';
+    $('modal-story-event').classList.add('is-open');
+    playSE('skill_proc');
+  }
+
+  function initStoryEventModal() {
+    $('btn-story-event-close').addEventListener('click', () => {
+      $('modal-story-event').classList.remove('is-open');
+    });
   }
 
   // ===================================================
@@ -3014,9 +3239,12 @@
 
   function initHandover() {
     $('btn-received').addEventListener('click', () => {
+      const triggered = maybeTickAndTriggerEvent();
       saveAll();
       renderCurrentTurn();
       showScreen('screen-game');
+      renderEventBanner();
+      if (triggered) showStoryEventModal(triggered);
     });
   }
 
@@ -3124,6 +3352,7 @@
     initSubgameHilo();
     initSubgameTd();
     initSoundToggle();
+    initStoryEventModal();
     $('btn-draw').addEventListener('click', () => { ensureAudioContext(); startDraw(); });
     $('btn-card-execute').addEventListener('click', executeCard);
     // 最初のユーザー操作で AudioContext を起こす（iOS Safari 対策）
