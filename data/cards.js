@@ -154,7 +154,20 @@ const CARDS = [
 
   // ========= 3.10 #サブゲーム発火（1枚） =========
   // 引くとサブゲームをランダムで起動する。サブゲーム完了後にターン消費。
-  { id: 101, category: 'サブゲーム', hashtag: '#マスターの気まぐれ', text: 'マスターの気まぐれでサブゲーム開始！ランダムで「21」「キャラルーレット」「ハイ&ロー」「真実か挑戦か」のいずれかが始まる。', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['特殊'] }
+  { id: 101, category: 'サブゲーム', hashtag: '#マスターの気まぐれ', text: 'マスターの気まぐれでサブゲーム開始！ランダムで「21」「キャラルーレット」「ハイ&ロー」「真実か挑戦か」のいずれかが始まる。', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['特殊'] },
+
+  // ========= 3.11 #BAR系（10枚） =========
+  // 「飲ませる」より「BARの雰囲気・トーク」を作るカード群。引いた人がお題に答える。
+  { id: 102, category: 'BAR', hashtag: '#マスターおすすめ', text: '今飲んでる物を、超オシャレなBAR風に紹介しろ！', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
+  { id: 103, category: 'BAR', hashtag: '#裏メニュー', text: '存在しないカクテル名を即興で作れ！材料も添えて。', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
+  { id: 104, category: 'BAR', hashtag: '#深夜2時', text: '今の空気に合うBGMを1曲提案！理由も添えて。', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
+  { id: 105, category: 'BAR', hashtag: '#常連トーク', text: 'このBARに一番通ってそうな人を全員で指差して決めろ！', targetType: 'situation', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
+  { id: 106, category: 'BAR', hashtag: '#しみる一杯', text: '今の気分に合う架空の酒名を答えろ！（例：人生ハイボール、残業サワー、優勝レモン）', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
+  { id: 107, category: 'BAR', hashtag: '#本日のおすすめ', text: '今日のBARのおすすめメニューを即興で考えて発表！', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
+  { id: 108, category: 'BAR', hashtag: '#閉店間際', text: '帰りたくない理由をそれっぽく語れ！', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
+  { id: 109, category: 'BAR', hashtag: '#カウンター席', text: '右隣の人と「常連っぽい会話」を10秒間続けろ！', targetType: 'situation', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
+  { id: 110, category: 'BAR', hashtag: '#隠れ名店', text: 'このBARの裏設定を1つ追加しろ！（例：マスターが元ボクサー）', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] },
+  { id: 111, category: 'BAR', hashtag: '#深夜テンション', text: '今の店内の空気を一言で表せ！', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['BAR'] }
 ];
 
 // グローバル公開（モジュール非対応の単一HTML構成のため）
