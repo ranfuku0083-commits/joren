@@ -150,7 +150,11 @@ const CARDS = [
   { id: 97, category: '特殊', hashtag: '#王冠', text: '引いた人が「今夜のMVP仮認定」！30分間命令権。', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: [], triggerTags: ['特殊', '命令'] },
   { id: 98, category: '特殊', hashtag: '#リセット', text: '引いた人が、罰ゲーム指名を1回取り消せる権利獲得。', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: [], triggerTags: ['特殊'] },
   { id: 99, category: '特殊', hashtag: '#伝説の一杯', text: '全員同時に乾杯→一番美味そうに飲んだ人を記録！', targetType: 'all', targetTags: [], drinkCount: 1, duration: null, triggerCharacters: [], triggerTags: ['特殊', '乾杯'] },
-  { id: 100, category: '特殊', hashtag: '#タイムマシン', text: '全員で1分前の自分を演じ直す！失敗者が一気。', targetType: 'situation', targetTags: [], drinkCount: 1, duration: null, triggerCharacters: [], triggerTags: ['特殊'] }
+  { id: 100, category: '特殊', hashtag: '#タイムマシン', text: '全員で1分前の自分を演じ直す！失敗者が一気。', targetType: 'situation', targetTags: [], drinkCount: 1, duration: null, triggerCharacters: [], triggerTags: ['特殊'] },
+
+  // ========= 3.10 #サブゲーム発火（1枚） =========
+  // 引くとサブゲームをランダムで起動する。サブゲーム完了後にターン消費。
+  { id: 101, category: 'サブゲーム', hashtag: '#マスターの気まぐれ', text: 'マスターの気まぐれでサブゲーム開始！ランダムで「21」「キャラルーレット」「ハイ&ロー」「真実か挑戦か」のいずれかが始まる。', targetType: 'self', targetTags: [], drinkCount: 0, duration: null, triggerCharacters: ['master'], triggerTags: ['特殊'] }
 ];
 
 // グローバル公開（モジュール非対応の単一HTML構成のため）

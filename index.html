@@ -1169,7 +1169,8 @@
     pendingSkillIndex: 0,
     activeTimers: [],     // [{ id, cardId, hashtag, text, duration, endsAt, alarmTriggered }]
     pendingViolateTimerId: null, // 違反者選択モーダル展開中のタイマーID
-    pendingSkillTimeoutId: null  // スキル表示遅延タイマーID
+    pendingSkillTimeoutId: null, // スキル表示遅延タイマーID
+    subgameContext: null  // 'menu' | 'card' — サブゲーム起動経路
   };
 
   // カード表示後にスキルモーダルを出すまでの遅延（ms）
@@ -1937,7 +1938,38 @@
       startMissionTimer(card);
     }
     saveAll();
+    // サブゲーム発火カードはランダムにサブゲームを起動（ターン消費はサブゲーム終了時）
+    if (card.category === 'サブゲーム') {
+      triggerRandomSubgameFromCard();
+      return;
+    }
     showHandover();
+  }
+
+  // ===================================================
+  // サブゲーム経路管理
+  // ===================================================
+  function triggerRandomSubgameFromCard() {
+    state.subgameContext = 'card';
+    const pool = ['21', 'roulette', 'hilo', 'td'];
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    switch (pick) {
+      case '21':       startSubgame21(); break;
+      case 'roulette': startSubgameRoulette(); break;
+      case 'hilo':     startSubgameHilo(); break;
+      case 'td':       startSubgameTd(); break;
+    }
+  }
+
+  function endSubgameSession() {
+    const ctx = state.subgameContext;
+    state.subgameContext = null;
+    if (ctx === 'card') {
+      showHandover();
+    } else {
+      showScreen('screen-game');
+      renderCurrentTurn();
+    }
   }
 
   // ===================================================
@@ -2480,15 +2512,17 @@
         });
       });
       saveAll();
-      showScreen('screen-game');
-      renderCurrentTurn();
+      endSubgameSession();
     });
     $('btn-sg21-replay').addEventListener('click', startSubgame21);
   }
 
   function initSubgame21() {
-    $('btn-subgame-21').addEventListener('click', startSubgame21);
-    $('btn-sg21-back').addEventListener('click', () => showScreen('screen-game'));
+    $('btn-subgame-21').addEventListener('click', () => {
+      state.subgameContext = 'menu';
+      startSubgame21();
+    });
+    $('btn-sg21-back').addEventListener('click', endSubgameSession);
   }
 
   // ===================================================
@@ -2597,20 +2631,22 @@
         });
       });
       saveAll();
-      showScreen('screen-game');
-      renderCurrentTurn();
+      endSubgameSession();
     });
     $('btn-roulette-replay').addEventListener('click', startSubgameRoulette);
   }
 
   function initSubgameRoulette() {
-    $('btn-subgame-roulette').addEventListener('click', startSubgameRoulette);
+    $('btn-subgame-roulette').addEventListener('click', () => {
+      state.subgameContext = 'menu';
+      startSubgameRoulette();
+    });
     $('btn-subgame-roulette-back').addEventListener('click', () => {
       if (subgameRoulette.timeoutHandle) {
         clearTimeout(subgameRoulette.timeoutHandle);
         subgameRoulette.timeoutHandle = null;
       }
-      showScreen('screen-game');
+      endSubgameSession();
     });
   }
 
@@ -2777,8 +2813,7 @@
           });
           saveAll();
         }
-        showScreen('screen-game');
-        renderCurrentTurn();
+        endSubgameSession();
       });
       $('btn-hilo-replay').addEventListener('click', startSubgameHilo);
     }
@@ -2793,13 +2828,15 @@
       subgame: 'hilo', streak: subgameHilo.streak, bonus: true
     });
     saveAll();
-    showScreen('screen-game');
-    renderCurrentTurn();
+    endSubgameSession();
   }
 
   function initSubgameHilo() {
-    $('btn-subgame-hilo').addEventListener('click', startSubgameHilo);
-    $('btn-subgame-hilo-back').addEventListener('click', () => showScreen('screen-game'));
+    $('btn-subgame-hilo').addEventListener('click', () => {
+      state.subgameContext = 'menu';
+      startSubgameHilo();
+    });
+    $('btn-subgame-hilo-back').addEventListener('click', endSubgameSession);
   }
 
   // ===================================================
@@ -2950,15 +2987,15 @@
       </div>
     `;
     $('btn-td-replay').addEventListener('click', startSubgameTd);
-    $('btn-td-back').addEventListener('click', () => {
-      showScreen('screen-game');
-      renderCurrentTurn();
-    });
+    $('btn-td-back').addEventListener('click', endSubgameSession);
   }
 
   function initSubgameTd() {
-    $('btn-subgame-td').addEventListener('click', startSubgameTd);
-    $('btn-subgame-td-back').addEventListener('click', () => showScreen('screen-game'));
+    $('btn-subgame-td').addEventListener('click', () => {
+      state.subgameContext = 'menu';
+      startSubgameTd();
+    });
+    $('btn-subgame-td-back').addEventListener('click', endSubgameSession);
   }
 
   // ===================================================
