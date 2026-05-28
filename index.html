@@ -343,6 +343,22 @@
       text-transform: uppercase; margin: 0 0 16px;
     }
     .card-text { font-size: 17px; line-height: 1.6; margin: 0 0 16px; }
+    .card-instruction {
+      margin: 0 0 14px;
+      padding: 10px 12px;
+      background: rgba(232, 165, 71, 0.14);
+      border-left: 3px solid var(--color-accent-2);
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.45;
+      color: var(--color-text-primary);
+    }
+    .card-instruction .lbl {
+      display: block; font-size: 10px; opacity: 0.7;
+      letter-spacing: 0.15em; margin-bottom: 3px; font-weight: 600;
+      color: var(--color-accent-2);
+    }
     .card-targets {
       padding: 12px; border-top: 1px dashed rgba(245, 230, 203, 0.2);
       font-size: 13px;
@@ -896,6 +912,10 @@
       <div class="card-paper">
         <div id="card-hashtag" class="card-hashtag">#乾杯</div>
         <div id="card-category" class="card-category">乾杯</div>
+        <div id="card-instruction" class="card-instruction">
+          <span class="lbl">今やること</span>
+          <span id="card-instruction-text"></span>
+        </div>
         <div id="card-text" class="card-text"></div>
         <div class="card-targets">
           <span class="lbl">対象:</span>
@@ -1726,10 +1746,56 @@
     }
   }
 
+  function buildInstruction(card) {
+    const drawer = currentPlayer();
+    const drawerName = drawer ? drawer.name + 'さん' : '引いた人';
+    const targetNames = state.pendingTargets
+      .map((pid) => state.players.find((x) => x.id === pid))
+      .filter((p) => p && p.id !== (drawer ? drawer.id : null))
+      .map((p) => p.name + 'さん');
+    const targetStr = targetNames.length ? targetNames.join('・') : null;
+
+    switch (card.category) {
+      case '乾杯':
+        if (card.targetType === 'all') return `${drawerName}の合図で全員で乾杯！`;
+        if (targetStr) return `${drawerName}と ${targetStr} で乾杯！`;
+        return `${drawerName}が対象を確認して乾杯！`;
+      case '一気':
+        if (card.targetType === 'self') return `${drawerName}が一気！1杯飲もう。`;
+        if (card.targetType === 'all') return `全員で一気！${drawerName}からどうぞ。`;
+        if (targetStr) return `${targetStr} が一気！${drawerName}は見届け役。`;
+        return `${drawerName}が対象を確認して一気！`;
+      case '指名':
+        return `${drawerName}が対象を指名→指名された人が1杯。`;
+      case '記憶':
+        return `${drawerName}が思い出して答える。外したら1杯。`;
+      case 'ミッション':
+        if (card.targetType === 'self') return `${drawerName}がミッションを実行。失敗したら1杯。`;
+        return `全員でミッション開始。違反したら1杯。`;
+      case 'ペア':
+        if (targetStr) return `${targetStr} がペアで乾杯！`;
+        return `指名されたペアで乾杯！`;
+      case '王様':
+        return `${drawerName}が王様になって命令を伝える。`;
+      case '観察':
+        return `${drawerName}が観察して判定。外したら1杯。`;
+      case 'BAR':
+        return `${drawerName}がお題に答える！BARの雰囲気を作ろう。`;
+      case '雰囲気':
+        if (card.targetType === 'all') return `全員で雰囲気を作ろう。${drawerName}が音頭を取って。`;
+        return `${drawerName}が雰囲気を演出！`;
+      case '特殊':
+        return `${drawerName}が特殊カードを発動！効果は本文の通り。`;
+      default:
+        return `${drawerName}がカードに従って進めよう。`;
+    }
+  }
+
   function renderCard(card) {
     $('card-hashtag').textContent = card.hashtag;
     $('card-category').textContent = card.category;
     $('card-text').textContent = card.text;
+    $('card-instruction-text').textContent = buildInstruction(card);
     const list = $('card-targets-list');
     list.innerHTML = '';
     if (card.targetType === 'situation') {
